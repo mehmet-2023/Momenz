@@ -16,9 +16,9 @@ services:
       - key: MOMENZ_COOKIE_SECURE
         value: true
       - key: MOMENZ_API_BASE_URL
-        value: https://momenz.onrender.app
+        value: https://momenz.onrender.com
       - key: MOMENZ_TRUSTED_HOSTS
-        value: momenz.onrender.app,momenz.onrender.com,localhost
+        value: momenz.onrender.com,localhost
       - key: MOMENZ_CORS_ORIGINS
         value: https://momenz.vercel.app
       - key: MOMENZ_WEB_BASE_URL

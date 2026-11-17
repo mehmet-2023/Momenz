@@ -57,7 +57,7 @@ def main() -> None:
         jwt_secret=secrets.token_urlsafe(48),
         cookie_secure="true" if is_prod else "false",
         trusted_hosts=(
-            "momenz.onrender.app,momenz.onrender.com,localhost"
+            "momenz.onrender.com,localhost"
             if is_prod
             else "localhost,127.0.0.1"
         ),

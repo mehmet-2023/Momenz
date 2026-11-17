@@ -9,7 +9,7 @@ eşleştirme yapılabilir. **Tek etkinlik türü vardır; kategori yoktur.**
 | Katman | URL |
 |---|---|
 | Web (Next.js, Vercel) | https://momenz.vercel.app |
-| API (FastAPI, Render) | https://momenz.onrender.app |
+| API (FastAPI, Render) | https://momenz.onrender.com |
 
 Frontend, `/api/v1/*` isteklerini Next.js rewrite ile API'ye proxy'ler;
 cookie'ler first-party kalır, CSRF çalışır.

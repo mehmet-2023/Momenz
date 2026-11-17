@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     app_name: str = "Momenz API"
     environment: str = "dev"
     debug: bool = False
-    api_base_url: str = "https://momenz.onrender.app"
+    api_base_url: str = "https://momenz.onrender.com"
     web_base_url: str = "https://momenz.vercel.app"
     # NoDecode: pydantic-settings bu alanları JSON sanıp çözmesin;
     # virgülle ayrılmış env değerini _split_lists kendisi parselesin.
@@ -58,7 +58,6 @@ class Settings(BaseSettings):
     login_rate_limit: int = 10  # dakikadaki deneme sayısı (IP + e-posta)
     trusted_hosts: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
-            "momenz.onrender.app",
             "momenz.onrender.com",
             "localhost",
             "127.0.0.1",

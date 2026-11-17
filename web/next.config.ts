@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 // Prod varsayılanı: Render üzerindeki FastAPI. Yerel geliştirmede
 // web/.env.local içinde API_BACKEND_URL=http://localhost:8000 olarak ezilebilir.
 const API_BACKEND =
-  process.env.API_BACKEND_URL || "https://momenz.onrender.app";
+  process.env.API_BACKEND_URL || "https://momenz.onrender.com";
 
 const nextConfig: NextConfig = {
   // API'yi aynı origin'e proxy'leriz: cookie'ler first-party kalır,
