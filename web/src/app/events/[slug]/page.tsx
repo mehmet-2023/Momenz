@@ -45,10 +45,10 @@ export default function EventDetailPage() {
     try {
       const [item, gallery] = await Promise.all([
         getEvent(slug),
-        getEventPhotos(slug, 40),
+        getEventPhotos(slug, 8),
       ]);
       setEvent(item);
-      setPhotos(gallery.items);
+      setPhotos(gallery.items.slice(0, 8));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Etkinlik yüklenemedi.");
     } finally {
@@ -153,7 +153,7 @@ export default function EventDetailPage() {
                   <div className="eyebrow">01 / FOTOĞRAFLAR</div>
                   <h2 className="section-title small">Etkinlikten kareler</h2>
                 </div>
-                <span className="meta">{photos.length} önizleme</span>
+                <span className="meta">{photos.length} önizleme · {event.image_count} fotoğraf</span>
               </div>
               {photos.length === 0 ? (
                 <div className="no-image">Henüz fotoğraf yüklenmedi. Tarama tamamlandığında burada görünecek.</div>

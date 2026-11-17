@@ -150,7 +150,6 @@ export default function Home() {
         <div className="hero-cursor" aria-hidden="true">
           <span className="cursor-label" ref={coordRef} />
         </div>
-        <div className="hero-by">BY OCAL</div>
 
         <div className="hero-inner">
           <h1 className="hero-title">

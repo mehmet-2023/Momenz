@@ -84,26 +84,25 @@ class EventOut(BaseModel):
     slug: str
     title: str
     description: str = ""
-    location: str = ""
-    event_date: str | None = None
-    date_label: str | None = None
     folder_key: str
     owner_id: str | None = None
     cover_url: str | None = None
+    # Drive metadata'sından gelir; kullanıcı girmez.
+    drive_uploaded_at: str | None = None
+    date_label: str | None = None
     image_count: int = 0
     face_count: int = 0
     attendee_count: int = 0
     is_attending: bool = False
     is_owner: bool = False
     is_public: bool = True
+    # Sisteme yüklenme tarihi (etkinlik kaydının oluşturulma anı).
     created_at: str | None = None
 
 
 class EventCreateIn(BaseModel):
-    title: str = Field(min_length=3, max_length=160)
-    description: str = Field(default="", max_length=4000)
-    location: str = Field(default="", max_length=200)
-    event_date: str | None = Field(default=None, max_length=40)
+    # Kullanıcıdan istenen tek şey Drive klasör linkidir. Başlık, fotoğraf
+    # sayısı ve Drive yükleme tarihi klasör metadata'sından okunur.
     url: str = Field(min_length=10, max_length=1000)
     include_subfolders: bool = True
 

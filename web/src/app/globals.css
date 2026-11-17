@@ -123,12 +123,6 @@ img { max-width: 100%; }
   font-family: var(--font-mono), monospace; font-size: .55rem;
   letter-spacing: .12em; color: #fff;
 }
-.hero-by {
-  position: absolute; z-index: 2; right: 24px; bottom: 22px;
-  font-family: var(--font-mono), monospace; font-size: .56rem;
-  letter-spacing: .24em; color: #b5b5b5;
-  border: 1px solid #444; padding: 6px 9px;
-}
 .hero-inner {
   position: relative; z-index: 2; max-width: 1120px; margin: 0 auto;
   padding-bottom: 64px;
@@ -166,9 +160,9 @@ img { max-width: 100%; }
 }
 .btn-primary:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
 .btn-light { background: #fff; color: var(--ink); padding: .95rem 1.15rem; font-size: .72rem; }
-.btn-light:hover { background: var(--ink); color: #fff; }
-.btn-ghost-light { border-color: #666; color: #fff; padding: .95rem 1.15rem; font-size: .72rem; }
-.btn-ghost-light:hover { background: #fff; color: var(--ink); }
+.btn.btn-light:hover { background: var(--ink); color: #fff; }
+.btn-ghost-light { background: transparent; border-color: #666; color: #fff; padding: .95rem 1.15rem; font-size: .72rem; }
+.btn.btn-ghost-light:hover { background: #fff; color: var(--ink); }
 .btn-small { padding: .42rem .55rem; font-size: .58rem; }
 .submit-wide { width: 100%; margin-top: 8px; }
 
@@ -649,7 +643,6 @@ textarea.input { min-height: 120px; resize: vertical; }
   .auth-shell { grid-template-columns: 1fr; }
   .auth-aside { padding: 28px 22px; }
   .auth-page { padding: 22px 14px 48px; }
-  .hero-by { right: 16px; bottom: 14px; }
   .toolbar-search { min-width: 100%; }
   .bottom-cta { padding: 22px; }
   .lightbox { padding: 18px; }
