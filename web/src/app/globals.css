@@ -802,7 +802,7 @@ textarea.input { min-height: 120px; resize: vertical; }
 
 @media (max-width: 700px) {
   .hero { padding: 72px 18px 64px; min-height: 86svh; }
-  .hero-lead { font-size: .9rem; }
+  .hero-lead { font-size: .78rem; line-height: 1.55; margin-bottom: 26px; }
   .hero-stats { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; }
   .hero-actions { margin-bottom: 40px; }
   .hero-actions .btn { width: 100%; }
