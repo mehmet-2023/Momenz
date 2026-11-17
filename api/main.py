@@ -143,8 +143,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/", include_in_schema=False)
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root() -> dict[str, str]:
+        # Render internal probe HEAD / kullanır; GET-only 405 döndürüyordu.
         return {"service": "momenz-api", "docs": "/docs"}
 
     @app.get("/health", response_model=HealthOut, tags=["system"])
