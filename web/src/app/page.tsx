@@ -2,10 +2,19 @@
 
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import EventCard from "@/components/EventCard";
 import { useAuth } from "@/components/AuthProvider";
 import { ApiError, listEvents } from "@/lib/api";
+import { DEMO_EVENT } from "@/lib/demo";
 import type { Event } from "@/lib/types";
 
 function useCountUp(target: number, duration = 900) {
@@ -43,6 +52,8 @@ function EventSkeleton() {
 
 export default function Home() {
   const { me, loading: authLoading } = useAuth();
+  const heroRef = useRef<HTMLElement>(null);
+  const coordRef = useRef<HTMLSpanElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState(0);
   const [upcoming, setUpcoming] = useState(false);
@@ -57,10 +68,18 @@ export default function Home() {
     setError("");
     try {
       const data = await listEvents({ upcoming, q: query || undefined, limit: 60 });
-      setEvents(data.items);
-      setTotal(data.total);
+      // ⚠️ TEST: canlı etkinlik yoksa/gerekirse demo kaydı gösterilir.
+      const merged = data.items.some((item) => item.id === DEMO_EVENT.id)
+        ? data.items
+        : [DEMO_EVENT, ...data.items];
+      setEvents(merged);
+      setTotal(data.total + (merged.length > data.items.length ? 1 : 0));
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Etkinlikler yüklenemedi.");
+      setEvents([DEMO_EVENT]);
+      setTotal(1);
+      if (cause instanceof ApiError && cause.status >= 500) {
+        setError(cause.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -73,6 +92,28 @@ export default function Home() {
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     setQuery(search.trim());
+  }
+
+  function onHeroMove(event: MouseEvent<HTMLElement>) {
+    const el = heroRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    el.style.setProperty("--mx", ((x / rect.width - 0.5) * 2).toFixed(3));
+    el.style.setProperty("--my", ((y / rect.height - 0.5) * 2).toFixed(3));
+    el.style.setProperty("--cx", `${x}px`);
+    el.style.setProperty("--cy", `${y}px`);
+    if (coordRef.current) {
+      coordRef.current.textContent = `${String(Math.round(x)).padStart(4, "0")}:${String(Math.round(y)).padStart(4, "0")}`;
+    }
+  }
+
+  function onHeroLeave() {
+    const el = heroRef.current;
+    if (!el) return;
+    el.style.setProperty("--mx", "0");
+    el.style.setProperty("--my", "0");
   }
 
   const { photoCount, faceCount, attendeeCount } = useMemo(
@@ -91,22 +132,30 @@ export default function Home() {
   const shownPhotos = useCountUp(photoCount);
   const shownFaces = useCountUp(faceCount);
   const shownTotal = useCountUp(total);
+  const selfFindSlug = events[0]?.slug || DEMO_EVENT.slug;
 
   const [featured, ...rest] = events;
 
   return (
     <main>
       {/* ------------------------------------------------------------- HERO */}
-      <section className="hero">
+      <section
+        className="hero"
+        ref={heroRef}
+        onMouseMove={onHeroMove}
+        onMouseLeave={onHeroLeave}
+      >
         <div className="hero-grid" aria-hidden="true" />
-        <div className="hero-inner">
-          <div className="hero-eyebrow reveal" style={{ animationDelay: "0ms" }}>
-            <span className="live-dot" /> TOPLULUK FOTOĞRAF ARŞİVİ · 2026
-          </div>
+        <div className="hero-scan" aria-hidden="true" />
+        <div className="hero-cursor" aria-hidden="true">
+          <span className="cursor-label" ref={coordRef} />
+        </div>
+        <div className="hero-by">BY OCAL</div>
 
+        <div className="hero-inner">
           <h1 className="hero-title">
             <span className="hero-line reveal" style={{ animationDelay: "80ms" }}>
-              Fotoğrafların
+              Binlerce fotoğrafın
             </span>
             <span className="hero-line reveal" style={{ animationDelay: "180ms" }}>
               içinde <em>kendini bul.</em>
@@ -114,26 +163,19 @@ export default function Home() {
           </h1>
 
           <p className="hero-lead reveal" style={{ animationDelay: "300ms" }}>
-            Momenz, etkinliklerin fotoğraflarını tek bir arşivde toplayan bir
-            topluluk platformu. Etkinlikleri keşfet, arşivde gezin, yüzünü yükle;
-            senin olan kareleri saniyeler içinde bulalım. Üçüncü taraf yüz tanıma
-            servisi yok, verilerin saklanmaz.
+            Momenz, etkinliklerde çekilen fotoğrafların arasında yüzünü bulan bir
+            yüz tanıma uygulaması. Etkinliğini seç, yüzünü yükle; binlerce kare
+            arasından sana ait olanları saniyeler içinde bul. Üçüncü taraf servis
+            yok, yüz verin saklanmaz.
           </p>
 
           <div className="hero-actions reveal" style={{ animationDelay: "400ms" }}>
-            <a className="btn btn-light" href="#etkinlikler">
+            <Link className="btn btn-light" href={`/events/${selfFindSlug}`}>
+              <span aria-hidden="true">⌖</span> Kendini Bul
+            </Link>
+            <a className="btn btn-ghost-light" href="#etkinlikler">
               Etkinlikleri keşfet <span aria-hidden="true">↓</span>
             </a>
-            {!authLoading &&
-              (me ? (
-                <Link className="btn btn-ghost-light" href="/events/new">
-                  + Etkinlik ekle
-                </Link>
-              ) : (
-                <Link className="btn btn-ghost-light" href="/register">
-                  Üye ol, arşive katıl
-                </Link>
-              ))}
           </div>
 
           <div className="hero-stats reveal" style={{ animationDelay: "520ms" }}>
@@ -155,29 +197,18 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        <div className="ticker" aria-hidden="true">
-          <div className="ticker-track">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <span key={i}>
-                ETKİNLİKLER <i>✳</i> FOTOĞRAFLAR <i>✳</i> YÜZ EŞLEŞTİRME <i>✳</i>{" "}
-                TOPLULUK <i>✳</i>
-              </span>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* ---------------------------------------------------------- ETKİNLİKLER */}
       <section className="container events-section" id="etkinlikler">
         <div className="section-head">
           <div>
-            <div className="eyebrow">01 / ARŞİV</div>
+            <div className="eyebrow">01 / ETKİNLİKLER</div>
             <h2 className="section-title">Etkinlikler</h2>
           </div>
           <p className="section-lead">
-            Her etkinlik kendi fotoğraf arşiviyle gelir. Birine katıl, kapak
-            fotoğraflarına göz at ve içinde kendi yüzünü ara.
+            Etkinlikleri keşfet, çekilen fotoğraflar arasında yüzünü ara. Her
+            etkinlikte binlerce kare olabilir; Momenz sana ait olanları ayıklar.
           </p>
         </div>
 
@@ -232,11 +263,11 @@ export default function Home() {
         ) : events.length === 0 ? (
           <div className="empty-state">
             <div className="empty-mark">∅</div>
-            <h3>{query ? "Sonuç bulunamadı." : "Arşiv henüz boş."}</h3>
+            <h3>{query ? "Sonuç bulunamadı." : "Henüz etkinlik yok."}</h3>
             <p>
               {query
                 ? "Farklı bir arama deneyebilirsin."
-                : "İlk etkinliği ekleyerek topluluk arşivini başlatabilirsin."}
+                : "İlk etkinliği ekleyerek yüz tanımayı deneyebilirsin."}
             </p>
             {me && !query && (
               <Link className="btn btn-primary" href="/events/new">
@@ -254,19 +285,17 @@ export default function Home() {
                   ) : (
                     <div className="featured-placeholder">KAPAK YOK</div>
                   )}
-                  <span className="featured-tag">ÖNE ÇIKAN</span>
+                  <span className="featured-tag">ETKİNLİK</span>
                 </div>
                 <div className="featured-body">
                   <div className="eyebrow">{featured.date_label || "TARİH YAKINDA"}</div>
                   <h3>{featured.title}</h3>
-                  {featured.description && (
-                    <p>{featured.description}</p>
-                  )}
+                  {featured.description && <p>{featured.description}</p>}
                   <div className="featured-meta">
                     <span>{featured.image_count} FOTOĞRAF</span>
                     <span>{featured.face_count} YÜZ</span>
                     <span>{featured.attendee_count} KATILIMCI</span>
-                    <span className="featured-cta">ARŞİVİ AÇ →</span>
+                    <span className="featured-cta">KENDİNİ BUL →</span>
                   </div>
                 </div>
               </Link>
@@ -290,11 +319,14 @@ export default function Home() {
         <div className="bottom-cta">
           <div>
             <div className="eyebrow">SENİN ETKİNLİĞİN</div>
-            <h3>Fotoğrafların bir araya gelsin.</h3>
-            <p>Drive klasörünü bağla, yüz taramasını arka planda çalıştır, arşivi toplulukla paylaş.</p>
+            <h3>Etkinliğinde seni bul.</h3>
+            <p>
+              Fotoğrafların bulunduğu klasörü bağla, yüz tanımayı arka planda
+              çalıştır; katılımcılar kendi fotoğraflarını kolayca bulsun.
+            </p>
           </div>
           <Link className="btn btn-primary" href={me ? "/events/new" : "/register"}>
-            {me ? "+ Etkinlik ekle" : "Üye ol ve başla"}
+            {me ? "+ Etkinlik ekle" : "Üye ol ve etkinlik ekle"}
           </Link>
         </div>
       </section>

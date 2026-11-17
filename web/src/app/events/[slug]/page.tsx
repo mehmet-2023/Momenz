@@ -15,11 +15,13 @@ import {
   joinEvent,
   leaveEvent,
 } from "@/lib/api";
+import { DEMO_EVENT, DEMO_PHOTOS } from "@/lib/demo";
 import type { Event, EventPhoto } from "@/lib/types";
 
 export default function EventDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
+  const isDemo = slug === DEMO_EVENT.slug;
   const { me, setMe } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
@@ -30,6 +32,14 @@ export default function EventDetailPage() {
   const [lightbox, setLightbox] = useState<EventPhoto | null>(null);
 
   const load = useCallback(async () => {
+    // ⚠️ TEST: geçici demo etkinliği API'ye gitmeden yerel veriden göster.
+    if (isDemo) {
+      setEvent(DEMO_EVENT);
+      setPhotos(DEMO_PHOTOS);
+      setError("");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -44,7 +54,7 @@ export default function EventDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [slug, isDemo]);
 
   useEffect(() => {
     void ensureCsrf();
@@ -74,7 +84,7 @@ export default function EventDetailPage() {
         setNotice("Etkinlikten ayrıldın.");
       } else {
         await joinEvent(event.slug);
-        setNotice("Etkinliğe katıldın. Arşiv artık senin de.");
+        setNotice("Etkinliğe katıldın. Fotoğraflar artık senin de.");
       }
       await load();
     } catch (cause) {
@@ -140,8 +150,8 @@ export default function EventDetailPage() {
             <section className="gallery-section">
               <div className="section-head compact">
                 <div>
-                  <div className="eyebrow">01 / ARŞİV</div>
-                  <h2 className="section-title small">Fotoğraflar</h2>
+                  <div className="eyebrow">01 / FOTOĞRAFLAR</div>
+                  <h2 className="section-title small">Etkinlikten kareler</h2>
                 </div>
                 <span className="meta">{photos.length} önizleme</span>
               </div>
@@ -172,7 +182,9 @@ export default function EventDetailPage() {
           <aside className="detail-aside">
             <div className="aside-card">
               <div className="aside-label">KATILIM</div>
-              {event.is_owner ? (
+              {isDemo ? (
+                <div className="aside-owner">Bu bir test etkinliğidir. Katılım devre dışı.</div>
+              ) : event.is_owner ? (
                 <div className="aside-owner">Bu etkinliği sen ekledin.</div>
               ) : me ? (
                 <button
@@ -214,7 +226,7 @@ export default function EventDetailPage() {
                 Bağlantıyı kopyala
               </button>
               <p className="aside-note">
-                Arşiv herkese açık. Bağlantıyı paylaşarak daha fazla kişinin kendi fotoğrafını bulmasını sağla.
+                Etkinlik herkese açık. Bağlantıyı paylaşarak daha fazla kişinin kendi fotoğrafını bulmasını sağla.
               </p>
             </div>
           </aside>

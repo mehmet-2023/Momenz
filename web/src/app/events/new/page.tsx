@@ -72,7 +72,7 @@ export default function NewEventPage() {
         <div className="empty-state">
           <div className="empty-mark">↗</div>
           <h3>Etkinlik eklemek için giriş yap.</h3>
-          <p>Hesabınla arşive etkinlik ekleyebilir, katılımcıları davet edebilirsin.</p>
+          <p>Hesabınla etkinlik ekleyebilir, katılımcıların fotoğrafını bulmasını sağlayabilirsin.</p>
           <div className="hero-actions" style={{ justifyContent: "center" }}>
             <Link className="btn btn-primary" href="/login">Giriş yap</Link>
             <Link className="btn" href="/register">Kayıt ol</Link>
@@ -96,8 +96,8 @@ export default function NewEventPage() {
           <h1 className="section-title">Etkinlik ekle</h1>
         </div>
         <p className="section-lead">
-          Fotoğrafların bulunduğu Drive klasörünü bağla; yüz taraması arka planda
-          çalışsın ve arşiv herkese açılsın.
+          Fotoğrafların bulunduğu Drive klasörünü bağla; yüz tanıma arka planda
+          çalışsın ve katılımcılar kendi fotoğraflarını bulsun.
         </p>
       </div>
 
@@ -196,9 +196,9 @@ export default function NewEventPage() {
         <aside className="form-aside">
           <div className="aside-label">NASIL ÇALIŞIR</div>
           <ol className="how-list">
-            <li><b>01</b><span>Klasörü bağla</span><p>Fotoğraf arşivinin Drive adresini gir.</p></li>
-            <li><b>02</b><span>Taramayı başlat</span><p>Yüzler arka planda tespit edilir, arşiv indekslenir.</p></li>
-            <li><b>03</b><span>Arşiv yayında</span><p>Etkinlik sayfası herkese açılır, katılımcılar fotoğrafını bulur.</p></li>
+            <li><b>01</b><span>Klasörü bağla</span><p>Etkinlikte çekilen fotoğrafların Drive adresini gir.</p></li>
+            <li><b>02</b><span>Taramayı başlat</span><p>Yüzler arka planda tespit edilir, fotoğraflar indekslenir.</p></li>
+            <li><b>03</b><span>Etkinlik yayında</span><p>Sayfa herkese açılır, katılımcılar kendi fotoğraflarını bulur.</p></li>
           </ol>
           <div className="aside-note">
             Yüz görüntüleri saklanmaz; yalnızca eşleştirme için geçici olarak işlenir.

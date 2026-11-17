@@ -6,7 +6,7 @@ export default function SiteFooter() {
       <div className="site-footer-inner">
         <div>
           <div className="site-footer-brand">MOMENZ.</div>
-          <p>Topluluk fotoğraf arşivi. Etkinlikleri keşfet, kendi fotoğrafını bul.</p>
+          <p>Etkinliklerde yüz tanıma. Binlerce fotoğrafın arasında kendini bul.</p>
         </div>
         <div className="site-footer-links">
           <Link href="/">Etkinlikler</Link>
@@ -15,7 +15,7 @@ export default function SiteFooter() {
         </div>
         <div className="site-footer-note">
           <span>© {new Date().getFullYear()} MOMENZ · BY OCAL</span>
-          <span>Yüz verisi saklanmaz. Sonuçları gözle doğrula.</span>
+          <span>Etkinliğe özel eşleştirme. Sonuçları gözle doğrula.</span>
         </div>
       </div>
     </footer>

@@ -57,13 +57,11 @@ function PasswordContent() {
     <main className="auth-page">
       <div className="auth-shell">
         <aside className="auth-aside">
-          <div className="eyebrow" style={{ color: "#9a9a9a" }}>MOMENZ / HESAP</div>
           <h2>Şifreni<br />yenile.</h2>
           <p>
             E-postana gönderilen bağlantıyla şifreni sıfırlayabilirsin.
             Bağlantı kısa süre geçerlidir ve yalnızca bir kez kullanılabilir.
           </p>
-          <div className="auth-aside-foot">● MAIL YALNIZCA BU AKİŞ İÇİN</div>
         </aside>
 
         <div className="auth-panel">

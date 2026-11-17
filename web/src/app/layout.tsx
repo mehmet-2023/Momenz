@@ -19,9 +19,9 @@ const mono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Momenz — Etkinlikleri keşfet, fotoğrafını bul",
+  title: "Momenz — Etkinliklerde yüz tanıma, fotoğrafını bul",
   description:
-    "Topluluk etkinliklerini keşfet, fotoğraf arşivine göz at ve kendi fotoğrafını bul. Üçüncü taraf yüz tanıma servisi yok.",
+    "Etkinliklerde çekilen binlerce fotoğrafın arasında yüz tanımayla kendi fotoğraflarını bul. Etkinliğini seç, yüzünü yükle, sana ait kareleri gör.",
 };
 
 export default function RootLayout({

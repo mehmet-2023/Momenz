@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <rect width="600" height="600" fill="#f3f3f0"/>
+  <g stroke="#0a0a0a" stroke-width="3" fill="none">
+    <path d="M60 60H540V540H60Z"/>
+    <path d="M60 300H540M300 60V540"/>
+    <path d="M60 60L540 540M540 60L60 540" opacity="0.4"/>
+  </g>
+  <g fill="#0a0a0a">
+    <rect x="240" y="240" width="120" height="120"/>
+  </g>
+  <rect x="270" y="270" width="60" height="60" fill="#f3f3f0"/>
+  <text x="60" y="580" font-family="monospace" font-size="18" font-weight="bold" fill="#0a0a0a">FOTO 098</text>
+  <text x="470" y="580" font-family="monospace" font-size="14" fill="#686868">76%</text>
+</svg>

@@ -25,7 +25,7 @@ export default function RegisterPage() {
     setError("");
     try {
       await auth.register({ email, password, name: name || undefined });
-      // Doğrulama yok: kayıt anında oturum açılır, doğrudan arşive gir.
+      // Doğrulama yok: kayıt anında oturum açılır, doğrudan etkinliklere dön.
       const result = await auth.login(email, password);
       setMe(result.user);
       router.push("/");
@@ -45,13 +45,12 @@ export default function RegisterPage() {
     <main className="auth-page">
       <div className="auth-shell">
         <aside className="auth-aside">
-          <div className="eyebrow" style={{ color: "#9a9a9a" }}>MOMENZ / KAYIT</div>
-          <h2>Arşivin<br />parçası ol.</h2>
+          <h2>Kendini bulmaya<br />başla.</h2>
           <p>
-            Etkinlik ekle, katılımcılara katıl, fotoğrafların içinde kendini bul.
-            E-posta doğrulaması yok — kaydolduktan sonra hemen kullanmaya başla.
+            Etkinliklerde çekilen binlerce fotoğrafın arasında yüzünü bul.
+            Etkinliğini ekle, katılımcılara katıl; kaydolduktan sonra hemen
+            kullanmaya başla.
           </p>
-          <div className="auth-aside-foot">● ÜCRETSİZ · DOĞRULAMA YOK</div>
         </aside>
 
         <div className="auth-panel">

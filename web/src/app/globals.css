@@ -16,9 +16,12 @@
 
 html { scroll-behavior: smooth; }
 
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; min-height: 100%; }
 
 body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif;
@@ -34,7 +37,7 @@ img { max-width: 100%; }
 ::selection { background: var(--ink); color: var(--paper); }
 
 .container { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
-.app-body { min-height: 70vh; }
+.app-body { flex: 1 0 auto; }
 .page-pad { padding-top: 48px; }
 
 /* ------------------------------------------------------------- masthead */
@@ -82,23 +85,55 @@ img { max-width: 100%; }
   padding: 76px 24px 0;
 }
 .hero-grid {
-  position: absolute; inset: 0; pointer-events: none;
+  position: absolute; inset: -20px; pointer-events: none;
   background-image:
     linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: linear-gradient(to bottom, #000 0%, transparent 92%);
   animation: gridDrift 24s linear infinite;
+  transform: translate(calc(var(--mx, 0) * -16px), calc(var(--my, 0) * -16px));
+  transition: transform .25s var(--ease);
 }
-.hero-inner { position: relative; max-width: 1120px; margin: 0 auto; padding-bottom: 64px; }
-.hero-eyebrow {
-  font-family: var(--font-mono), monospace; font-size: .66rem;
-  letter-spacing: .22em; text-transform: uppercase; color: #b5b5b5;
-  display: flex; align-items: center; gap: 10px; margin-bottom: 30px;
+/* İmleçle etkileşimli nişangâh: 1px eksenler + koordinat etiketi. */
+.hero-scan { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.hero-scan::after {
+  content: ""; position: absolute; top: 0; bottom: 0;
+  left: var(--cx, 50%); width: 1px; background: rgba(255,255,255,.16);
+  transition: left .12s linear;
 }
-.live-dot {
-  width: 7px; height: 7px; background: #fff; display: inline-block;
-  animation: pulseDot 1.8s ease-in-out infinite;
+.hero-scan::before {
+  content: ""; position: absolute; left: 0; right: 0;
+  top: var(--cy, 50%); height: 1px; background: rgba(255,255,255,.16);
+  transition: top .12s linear;
+}
+.hero-cursor {
+  position: absolute; z-index: 2; pointer-events: none;
+  left: var(--cx, 50%); top: var(--cy, 50%);
+  width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  border: 1px solid #fff;
+  transition: left .1s linear, top .1s linear;
+}
+.hero-cursor::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; background: #fff;
+}
+.cursor-label {
+  position: absolute; left: 34px; top: 7px; white-space: nowrap;
+  font-family: var(--font-mono), monospace; font-size: .55rem;
+  letter-spacing: .12em; color: #fff;
+}
+.hero-by {
+  position: absolute; z-index: 2; right: 24px; bottom: 22px;
+  font-family: var(--font-mono), monospace; font-size: .56rem;
+  letter-spacing: .24em; color: #b5b5b5;
+  border: 1px solid #444; padding: 6px 9px;
+}
+.hero-inner {
+  position: relative; z-index: 2; max-width: 1120px; margin: 0 auto;
+  padding-bottom: 64px;
+  transform: translate(calc(var(--mx, 0) * 5px), calc(var(--my, 0) * 5px));
+  transition: transform .3s var(--ease);
 }
 .hero-title {
   font-family: var(--font-mono), monospace; font-weight: 700;
@@ -149,15 +184,6 @@ img { max-width: 100%; }
   font-family: var(--font-mono), monospace; font-size: .6rem;
   letter-spacing: .16em; text-transform: uppercase; color: #8a8a8a;
 }
-
-.ticker { border-top: 1px solid #303030; overflow: hidden; padding: 13px 0; }
-.ticker-track {
-  display: flex; width: max-content; gap: 34px;
-  font-family: var(--font-mono), monospace; font-size: .64rem;
-  letter-spacing: .2em; color: #8a8a8a;
-  animation: marquee 34s linear infinite;
-}
-.ticker-track i { font-style: normal; color: #fff; }
 
 /* --------------------------------------------------------------- reveals */
 .reveal { opacity: 0; transform: translateY(20px); animation: revealUp .8s var(--ease) forwards; }
@@ -525,10 +551,6 @@ textarea.input { min-height: 120px; resize: vertical; }
   letter-spacing: -.07em; margin: 24px 0 18px;
 }
 .auth-aside p { color: #b9b9b9; font-size: .86rem; line-height: 1.65; margin: 0; }
-.auth-aside-foot {
-  margin-top: auto; padding-top: 40px; color: #777;
-  font-family: var(--font-mono), monospace; font-size: .55rem; letter-spacing: .16em;
-}
 .auth-panel { background: var(--paper); padding: 40px 38px; }
 .auth-card { width: 100%; }
 .auth-title {
@@ -544,7 +566,7 @@ textarea.input { min-height: 120px; resize: vertical; }
 .back-link:hover { color: var(--ink); }
 
 /* --------------------------------------------------------------- footer */
-.site-footer { background: var(--ink); color: #b5b5b5; border-top: 1px solid #2a2a2a; }
+.site-footer { flex-shrink: 0; background: var(--ink); color: #b5b5b5; border-top: 1px solid #2a2a2a; }
 .site-footer-inner {
   max-width: 1120px; margin: 0 auto; padding: 34px 24px;
   display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 32px;
@@ -571,10 +593,8 @@ textarea.input { min-height: 120px; resize: vertical; }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes blink { 50% { opacity: 0; } }
-@keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
 @keyframes pulse { 50% { opacity: .45; } }
 @keyframes gridDrift { to { background-position: 64px 64px; } }
-@keyframes marquee { to { transform: translateX(-50%); } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -586,6 +606,12 @@ textarea.input { min-height: 120px; resize: vertical; }
     scroll-behavior: auto !important;
   }
   .reveal { opacity: 1; transform: none; }
+  .hero-grid, .hero-inner { transform: none; }
+}
+
+/* Dokunmatik cihazlarda imleç nişangâhı anlamsız. */
+@media (hover: none) {
+  .hero-cursor, .hero-scan { display: none; }
 }
 
 /* -------------------------------------------------------------- responsive */
@@ -622,8 +648,8 @@ textarea.input { min-height: 120px; resize: vertical; }
   .form-panel, .auth-panel { padding: 22px 18px; }
   .auth-shell { grid-template-columns: 1fr; }
   .auth-aside { padding: 28px 22px; }
-  .auth-aside-foot { padding-top: 24px; }
   .auth-page { padding: 22px 14px 48px; }
+  .hero-by { right: 16px; bottom: 14px; }
   .toolbar-search { min-width: 100%; }
   .bottom-cta { padding: 22px; }
   .lightbox { padding: 18px; }

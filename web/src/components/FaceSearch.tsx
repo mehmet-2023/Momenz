@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import ResultCard from "@/components/ResultCard";
 import { ApiError, searchFace } from "@/lib/api";
+import { DEMO_FOLDER_KEY, DEMO_SEARCH_RESPONSE } from "@/lib/demo";
 import type { SearchResponse } from "@/lib/types";
 
 export default function FaceSearch({ folderKey }: { folderKey: string }) {
@@ -25,7 +26,13 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     setError("");
     setResults(null);
     try {
-      setResults(await searchFace(folderKey, file));
+      // ⚠️ TEST: demo etkinliğinde gerçek API yerine örnek sonuçlar döner.
+      if (folderKey === DEMO_FOLDER_KEY) {
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        setResults(DEMO_SEARCH_RESPONSE);
+      } else {
+        setResults(await searchFace(folderKey, file));
+      }
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Arama başarısız.");
     } finally {

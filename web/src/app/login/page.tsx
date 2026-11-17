@@ -46,13 +46,11 @@ function LoginContent() {
     <main className="auth-page">
       <div className="auth-shell">
         <aside className="auth-aside">
-          <div className="eyebrow" style={{ color: "#9a9a9a" }}>MOMENZ / ÜYE GİRİŞİ</div>
-          <h2>Arşive<br />hoş geldin.</h2>
+          <h2>Kendini<br />bulmaya hazır mısın?</h2>
           <p>
-            Etkinliklere katıl, fotoğraf arşivlerinde gezin ve kendi karelerini
-            bul. Hesabın yoksa bir dakikada üye olabilirsin.
+            Etkinliklerde çekilen fotoğraflar arasında yüzünü bul. Hesabın
+            yoksa bir dakikada üye olabilirsin.
           </p>
-          <div className="auth-aside-foot">● YÜZ VERİSİ SAKLANMAZ</div>
         </aside>
 
         <div className="auth-panel">
