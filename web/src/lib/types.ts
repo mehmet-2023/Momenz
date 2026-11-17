@@ -54,6 +54,36 @@ export type SearchResponse = {
   took_ms: number;
 };
 
+export type Event = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  event_date: string | null;
+  date_label: string | null;
+  folder_key: string;
+  cover_url: string | null;
+  image_count: number;
+  face_count: number;
+  attendee_count: number;
+  is_attending: boolean;
+  is_owner: boolean;
+  created_at?: string | null;
+};
+
+export type EventPhoto = {
+  file_id: string;
+  name: string;
+  thumb_url: string;
+  width: number;
+  height: number;
+};
+
+export type EventList = { items: Event[]; total: number };
+export type EventPhotoList = { items: EventPhoto[]; total: number };
+
 export type RegisterPayload = {
   email: string;
   password: string;

@@ -22,7 +22,7 @@ from .middleware import (
 )
 from .repositories import jobs as job_repo
 from .repositories import users as user_repo
-from .routes import auth, folders, images, jobs, search
+from .routes import auth, events, folders, images, jobs, search
 from .schemas import HealthOut
 from .services.search import SearchService
 
@@ -174,6 +174,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     prefix = "/api/v1"
     app.include_router(auth.router, prefix=prefix)
     app.include_router(folders.router, prefix=prefix)
+    app.include_router(events.router, prefix=prefix)
+    app.include_router(events.public_router, prefix=prefix)
     app.include_router(jobs.router, prefix=prefix)
     app.include_router(search.router, prefix=prefix)
     app.include_router(images.router, prefix=prefix)

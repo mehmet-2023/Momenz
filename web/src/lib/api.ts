@@ -1,4 +1,7 @@
 import type {
+  Event,
+  EventList,
+  EventPhotoList,
   Folder,
   Job,
   RegisterPayload,
@@ -120,6 +123,59 @@ export function deleteFolder(key: string): Promise<{ message: string }> {
 
 // ------------------------------------------------------------------ jobs
 export const getJob = (id: string) => api<Job>(`/jobs/${id}`);
+
+// ------------------------------------------------------------------ events
+export type EventFilters = {
+  upcoming?: boolean;
+  category?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export function listEvents(filters: EventFilters = {}): Promise<EventList> {
+  const params = new URLSearchParams();
+  if (filters.upcoming) params.set("upcoming", "true");
+  if (filters.category && filters.category !== "tumu")
+    params.set("category", filters.category);
+  if (filters.q) params.set("q", filters.q);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.offset) params.set("offset", String(filters.offset));
+  const suffix = params.toString() ? `?${params}` : "";
+  return api<EventList>(`/events${suffix}`);
+}
+
+export const getEvent = (slug: string) => api<Event>(`/events/${encodeURIComponent(slug)}`);
+export const getMyEvents = () => api<EventList>("/events/mine");
+export const getEventPhotos = (slug: string, limit = 24) =>
+  api<EventPhotoList>(`/events/${encodeURIComponent(slug)}/photos?limit=${limit}`);
+
+export async function createEvent(payload: {
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  event_date?: string;
+  url: string;
+  include_subfolders: boolean;
+}): Promise<{ event: Event; jobId: string }> {
+  const response = await apiResponse("/events", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  const event = await parse<Event>(response);
+  return { event, jobId: response.headers.get("X-Job-ID") || "" };
+}
+
+export const joinEvent = (slug: string) =>
+  api<{ message: string }>(`/events/${encodeURIComponent(slug)}/join`, {
+    method: "POST",
+  });
+
+export const leaveEvent = (slug: string) =>
+  api<{ message: string }>(`/events/${encodeURIComponent(slug)}/join`, {
+    method: "DELETE",
+  });
 
 // ------------------------------------------------------------------ search
 export async function searchFace(

@@ -8,8 +8,9 @@ from core.image_utils import decode_image_bytes
 
 from ..config import Settings, get_settings
 from ..db import D1Client
-from ..deps import get_db, require_user
+from ..deps import get_db, optional_user
 from ..errors import Forbidden, UpstreamError
+from ..repositories import events as event_repo
 from ..repositories import folders as folder_repo
 from ..schemas import SearchOut, SearchResultOut
 from ..services.search import SearchService
@@ -32,9 +33,12 @@ async def search(
     threshold: float | None = Form(default=None),
     db: D1Client = Depends(get_db),
     settings: Settings = Depends(get_settings),
-    user=Depends(require_user),
+    user=Depends(optional_user),
 ) -> SearchOut:
-    if not folder_repo.exists_for_user(db, user.id, folder_key):
+    is_public = event_repo.is_public_folder(db, folder_key)
+    if not is_public and (
+        not user or not folder_repo.exists_for_user(db, user.id, folder_key)
+    ):
         raise Forbidden("Bu klasöre erişim iznin yok.")
 
     data = await file.read()
@@ -83,8 +87,16 @@ async def search(
                 score=float(result.get("score") or 0.0),
                 width=int(result.get("width") or 0),
                 height=int(result.get("height") or 0),
-                thumb_url=f"/api/v1/images/{file_id}/thumb?folder_key={folder_key}",
-                download_url=f"/api/v1/images/{file_id}/download?folder_key={folder_key}",
+                thumb_url=(
+                    f"/api/v1/public/folders/{folder_key}/photos/{file_id}/thumb"
+                    if is_public
+                    else f"/api/v1/images/{file_id}/thumb?folder_key={folder_key}"
+                ),
+                download_url=(
+                    None
+                    if is_public
+                    else f"/api/v1/images/{file_id}/download?folder_key={folder_key}"
+                ),
                 drive_url=f"https://drive.google.com/file/d/{file_id}/view",
             )
         )

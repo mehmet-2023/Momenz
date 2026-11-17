@@ -74,6 +74,18 @@ def get_current_user(
     return user
 
 
+def optional_user(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    db: D1Client = Depends(get_db),
+) -> CurrentUser | None:
+    """Oturum varsa kullanıcıyı döner, yoksa/bozuksa None — public yollar için."""
+    try:
+        return get_current_user(request, settings, db)
+    except Exception:
+        return None
+
+
 def require_user(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     return user
 

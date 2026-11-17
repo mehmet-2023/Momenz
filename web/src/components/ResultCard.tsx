@@ -17,9 +17,11 @@ export default function ResultCard({ result }: { result: SearchResult }) {
         {result.name || result.file_id}
       </div>
       <div className="result-actions">
-        <a className="btn btn-small" href={result.download_url} download>
-          İndir
-        </a>
+        {result.download_url && (
+          <a className="btn btn-small" href={result.download_url} download>
+            İndir
+          </a>
+        )}
         <a className="btn btn-small" href={result.drive_url} target="_blank" rel="noreferrer">
           Drive
         </a>

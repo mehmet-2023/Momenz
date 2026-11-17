@@ -78,6 +78,56 @@ class FolderListOut(BaseModel):
     total: int
 
 
+# ------------------------------------------------------------------ events
+class EventOut(BaseModel):
+    id: str
+    slug: str
+    title: str
+    description: str = ""
+    category: str = "diger"
+    location: str = ""
+    event_date: str | None = None
+    date_label: str | None = None
+    folder_key: str
+    owner_id: str | None = None
+    cover_url: str | None = None
+    image_count: int = 0
+    face_count: int = 0
+    attendee_count: int = 0
+    is_attending: bool = False
+    is_owner: bool = False
+    is_public: bool = True
+    created_at: str | None = None
+
+
+class EventCreateIn(BaseModel):
+    title: str = Field(min_length=3, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    category: str = Field(default="diger", max_length=40)
+    location: str = Field(default="", max_length=200)
+    event_date: str | None = Field(default=None, max_length=40)
+    url: str = Field(min_length=10, max_length=1000)
+    include_subfolders: bool = True
+
+
+class EventListOut(BaseModel):
+    items: list[EventOut]
+    total: int
+
+
+class EventPhotoOut(BaseModel):
+    file_id: str
+    name: str
+    thumb_url: str
+    width: int = 0
+    height: int = 0
+
+
+class EventPhotoListOut(BaseModel):
+    items: list[EventPhotoOut]
+    total: int
+
+
 # ------------------------------------------------------------------ jobs
 class JobOut(BaseModel):
     id: str
