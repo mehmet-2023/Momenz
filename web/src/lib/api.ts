@@ -158,12 +158,8 @@ export const getEventPhotos = (slug: string, limit = 24) =>
   api<EventPhotoList>(`/events/${encodeURIComponent(slug)}/photos?limit=${limit}`);
 
 export async function createEvent(payload: {
-  title: string;
-  description: string;
-  location: string;
-  event_date?: string;
   url: string;
-  include_subfolders: boolean;
+  include_subfolders?: boolean;
 }): Promise<{ event: Event; jobId: string }> {
   const response = await apiResponse("/events", {
     method: "POST",

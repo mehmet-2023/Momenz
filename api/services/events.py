@@ -69,16 +69,19 @@ def create_event(
             include_subfolders=payload.include_subfolders,
         ),
     )
+    # Başlık Drive klasörünün adından gelir; kullanıcı bir şey yazmaz.
+    title = (folder.title or "").strip() or "Etkinlik"
     repo.create(
         db,
         event_id=new_id(),
-        slug=_slug(payload.title),
+        slug=_slug(title),
         owner_id=owner_id,
         folder_key=folder.key,
-        title=payload.title.strip(),
-        description=payload.description.strip(),
-        location=payload.location.strip(),
-        event_date=payload.event_date or None,
+        title=title,
+        description=(
+            "Bu etkinliğin fotoğrafları Drive klasöründen alındı. "
+            "Yüzünü yükleyerek sana ait kareleri bulabilirsin."
+        ),
     )
     created = repo.get_by_folder(db, folder.key, owner_id)
     if not created:

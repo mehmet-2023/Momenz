@@ -67,7 +67,12 @@ function PasswordContent() {
         <div className="auth-panel">
           <div className="auth-card">
             <div className="eyebrow">{token ? "01 / YENİ ŞİFRE" : "01 / ŞİFREMİ UNUTTUM"}</div>
-            <h1 className="auth-title">{token ? "Yeni şifre belirle" : "Şifreni mi unuttun?"}</h1>
+            <h1
+              className="auth-title"
+              data-text={token ? "Yeni şifre belirle" : "Şifreni mi unuttun?"}
+            >
+              {token ? "Yeni şifre belirle" : "Şifreni mi unuttun?"}
+            </h1>
 
             {error && <div className="alert alert-error">{error}</div>}
 

@@ -105,7 +105,7 @@ export default function EventDetailPage() {
 
   return (
     <main className="container detail-page">
-      <nav className="breadcrumb" aria-label="Konum">
+      <nav className="breadcrumb" aria-label="Gezinme">
         <Link href="/">ETKİNLİKLER</Link>
         <span>/</span>
         <span>{event?.title || "YÜKLENİYOR"}</span>
@@ -139,8 +139,10 @@ export default function EventDetailPage() {
             <div className="detail-heading">
               <div className="eyebrow">{event.date_label || "TARİH YAKINDA"}</div>
               <h1>{event.title}</h1>
-              {event.location && (
-                <div className="detail-location">⌖ {event.location}</div>
+              {event.drive_uploaded_at && (
+                <div className="detail-location">
+                  ↥ Drive yükleme: {event.date_label || event.drive_uploaded_at}
+                </div>
               )}
               {event.description && (
                 <p className="detail-desc">{event.description}</p>
@@ -213,7 +215,15 @@ export default function EventDetailPage() {
               <div className="aside-label">ETKİNLİK BİLGİLERİ</div>
               <dl className="fact-list">
                 <div><dt>Tarih</dt><dd>{event.date_label || "—"}</dd></div>
-                <div><dt>Konum</dt><dd>{event.location || "—"}</dd></div>
+                <div><dt>Drive yükleme</dt><dd>{event.date_label || "—"}</dd></div>
+                <div>
+                  <dt>Sisteme yükleme</dt>
+                  <dd>
+                    {event.created_at
+                      ? new Date(event.created_at).toLocaleDateString("tr-TR")
+                      : "—"}
+                  </dd>
+                </div>
                 <div><dt>Fotoğraf</dt><dd>{event.image_count}</dd></div>
                 <div><dt>Yüz</dt><dd>{event.face_count}</dd></div>
                 <div><dt>Ekleyen</dt><dd>{event.is_owner ? "Sen" : "Topluluk"}</dd></div>

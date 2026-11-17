@@ -56,7 +56,7 @@ export default function RegisterPage() {
         <div className="auth-panel">
           <div className="auth-card">
             <div className="eyebrow">02 / YENİ HESAP</div>
-            <h1 className="auth-title">Kayıt ol</h1>
+            <h1 className="auth-title" data-text="Kayıt ol">Kayıt ol</h1>
 
             {error && <div className="alert alert-error">{error}</div>}
 

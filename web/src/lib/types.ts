@@ -59,8 +59,7 @@ export type Event = {
   slug: string;
   title: string;
   description: string;
-  location: string;
-  event_date: string | null;
+  drive_uploaded_at: string | null;
   date_label: string | null;
   folder_key: string;
   cover_url: string | null;

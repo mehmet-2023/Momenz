@@ -77,12 +77,18 @@ def run_job(settings: Settings, job: dict) -> dict[str, Any]:
             on_progress=on_progress,
         )
         store.flush()
+        # Fotoğraf sayısı Drive metadatasından gelsin: klasörde bulunan tüm
+        # görsellerin sayısı index sonunda drive_folders.meta'ya yazılır.
+        total_found = int(summary.get("total_found") or 0)
+        if total_found:
+            store.set_meta("folder_count", str(total_found))
         version = folder_repo.bump_version(db, folder_key)
 
         counters = summary.get("counters") or {}
         result = {
             "processed": int(summary.get("processed") or 0),
             "skipped": int(summary.get("skipped") or 0),
+            "photos": total_found,
             "faces": int(counters.get("faces") or 0),
             "version": version,
         }

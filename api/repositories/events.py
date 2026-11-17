@@ -7,17 +7,22 @@ from ..db import D1Client
 
 _SELECT = """
     SELECT e.*,
+           json_extract(d.meta, '$.folder_date') AS drive_uploaded_at,
            (SELECT file_id FROM drive_face_index
             WHERE folder_key = e.folder_key ORDER BY file_id LIMIT 1) AS first_file_id,
            (SELECT COUNT(*) FROM event_attendees a WHERE a.event_id = e.id)
                AS attendee_count,
            (SELECT COUNT(*) FROM event_attendees a
             WHERE a.event_id = e.id AND a.user_id = ?) AS attending_flag,
-           (SELECT COUNT(DISTINCT f.file_id) FROM drive_face_index f
-            WHERE f.folder_key = e.folder_key) AS image_count,
+           COALESCE(
+               NULLIF(json_extract(d.meta, '$.folder_count'), ''),
+               (SELECT COUNT(DISTINCT f.file_id) FROM drive_face_index f
+                WHERE f.folder_key = e.folder_key)
+           ) AS image_count,
            (SELECT COALESCE(SUM(json_array_length(f.faces)), 0) FROM drive_face_index f
             WHERE f.folder_key = e.folder_key) AS face_count
     FROM events e
+    LEFT JOIN drive_folders d ON d.folder_key = e.folder_key
 """
 
 
@@ -42,9 +47,8 @@ def _to_out(row: dict, viewer_id: str = "") -> dict[str, Any]:
         "slug": str(row.get("slug") or ""),
         "title": str(row.get("title") or "Etkinlik"),
         "description": str(row.get("description") or ""),
-        "location": str(row.get("location") or ""),
-        "event_date": row.get("event_date"),
-        "date_label": _date_label(row.get("event_date")),
+        "drive_uploaded_at": row.get("drive_uploaded_at"),
+        "date_label": _date_label(row.get("drive_uploaded_at")),
         "folder_key": folder_key,
         "owner_id": row.get("owner_id"),
         "cover_url": (
@@ -79,13 +83,12 @@ def list_all(
         params.append(owner_id)
     if query:
         like = f"%{query.strip()}%"
-        where.append("(e.title LIKE ? OR e.location LIKE ? OR e.description LIKE ?)")
+        where.append("(e.title LIKE ? OR e.description LIKE ? OR e.slug LIKE ?)")
         params.extend([like, like, like])
-    if upcoming:
-        where.append("(e.event_date IS NULL OR e.event_date >= date('now'))")
+    # Etkinlik tarihi artık Drive metadata'sından geliyor; "yaklaşan" filtresi yok.
 
     sql = _SELECT + " WHERE " + " AND ".join(where)
-    sql += " ORDER BY e.event_date IS NULL, e.event_date ASC, e.created_at DESC"
+    sql += " ORDER BY e.created_at DESC"
     sql += " LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     return [_to_out(row, viewer_id) for row in db.query(sql, params)]
@@ -105,10 +108,8 @@ def count_all(
         params.append(owner_id)
     if query:
         like = f"%{query.strip()}%"
-        where.append("(e.title LIKE ? OR e.location LIKE ? OR e.description LIKE ?)")
+        where.append("(e.title LIKE ? OR e.description LIKE ? OR e.slug LIKE ?)")
         params.extend([like, like, like])
-    if upcoming:
-        where.append("(e.event_date IS NULL OR e.event_date >= date('now'))")
     row = db.query_one(
         "SELECT COUNT(*) AS n FROM events e WHERE " + " AND ".join(where), params
     )
@@ -144,15 +145,13 @@ def create(
     folder_key: str,
     title: str,
     description: str,
-    location: str,
-    event_date: str | None,
 ) -> None:
     db.execute(
         """
         INSERT INTO events
             (id, slug, owner_id, folder_key, title, description,
-             location, event_date, is_public, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+             is_public, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
         """,
         (
             event_id,
@@ -161,8 +160,6 @@ def create(
             folder_key,
             title,
             description,
-            location,
-            event_date,
         ),
     )
 

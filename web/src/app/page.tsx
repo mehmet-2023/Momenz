@@ -56,7 +56,6 @@ export default function Home() {
   const coordRef = useRef<HTMLSpanElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState(0);
-  const [upcoming, setUpcoming] = useState(false);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -67,7 +66,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     try {
-      const data = await listEvents({ upcoming, q: query || undefined, limit: 60 });
+      const data = await listEvents({ q: query || undefined, limit: 60 });
       // ⚠️ TEST: canlı etkinlik yoksa/gerekirse demo kaydı gösterilir.
       const merged = data.items.some((item) => item.id === DEMO_EVENT.id)
         ? data.items
@@ -83,7 +82,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [upcoming, query]);
+  }, [query]);
 
   useEffect(() => {
     void load();
@@ -218,19 +217,11 @@ export default function Home() {
               className="toolbar-input"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Etkinlik veya konum ara..."
+              placeholder="Etkinlik ara..."
               aria-label="Etkinlik ara"
             />
             <button className="btn" type="submit">ARA</button>
           </form>
-          <button
-            type="button"
-            className={`chip${upcoming ? " active" : ""}`}
-            onClick={() => setUpcoming((value) => !value)}
-            aria-pressed={upcoming}
-          >
-            {upcoming ? "● Yaklaşanlar" : "○ Yaklaşanlar"}
-          </button>
           <div className="view-toggle" role="group" aria-label="Görünüm">
             <button
               type="button"
@@ -276,7 +267,7 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {!query && !upcoming && featured && (
+            {!query && featured && (
               <Link className="featured" href={`/events/${featured.slug}`}>
                 <div className="featured-media">
                   {featured.cover_url ? (
@@ -308,7 +299,7 @@ export default function Home() {
             )}
 
             <div className={view === "grid" ? "event-grid" : "event-list"}>
-              {(query || upcoming ? events : rest).map((event) => (
+              {(query ? events : rest).map((event) => (
                 <EventCard key={event.id} event={event} view={view} />
               ))}
             </div>
@@ -318,7 +309,7 @@ export default function Home() {
         <div className="bottom-cta">
           <div>
             <div className="eyebrow">SENİN ETKİNLİĞİN</div>
-            <h3>Etkinliğinde seni bul.</h3>
+            <h3>Etkinliğini yayınla.</h3>
             <p>
               Fotoğrafların bulunduğu klasörü bağla, yüz tanımayı arka planda
               çalıştır; katılımcılar kendi fotoğraflarını kolayca bulsun.

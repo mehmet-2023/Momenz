@@ -12,8 +12,7 @@ export const DEMO_EVENT: Event = {
   title: "Test Etkinliği",
   description:
     "Bu bir deneme etkinliğidir. Etkinlik sırasında çekilen binlerce fotoğraf arasından yüzünü nasıl bulabileceğini görmek için yüzünü yükle, eşleşen kareleri gör.",
-  location: "Test Mekânı",
-  event_date: "2026-11-20",
+  drive_uploaded_at: "2026-11-20T09:30:00Z",
   date_label: "20 Kas 2026",
   folder_key: DEMO_FOLDER_KEY,
   cover_url: "/demo/kapak.svg",

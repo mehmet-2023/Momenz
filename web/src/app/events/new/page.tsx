@@ -5,65 +5,101 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ApiError, createEvent, ensureCsrf, getJob } from "@/lib/api";
-import type { Job } from "@/lib/types";
+import type { Event, Job } from "@/lib/types";
+
+const TERMINAL = ["done", "failed", "canceled"];
+
+function mmss(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function phaseFor(job: Job | null) {
+  if (!job) return { no: "00", title: "Hazırlanıyor", line: "Kapılar açılıyor..." };
+  if (job.status === "done")
+    return { no: "05", title: "Tamamlandı", line: "Hepsi burada. Fotoğrafların hazır!" };
+  if (job.status === "failed")
+    return { no: "!!", title: "Bir şeyler ters gitti", line: "Tekrar deneyeceğiz, sorun değil." };
+  if (job.status === "canceled")
+    return { no: "--", title: "İptal edildi", line: "Tamam, vazgeçtik." };
+  const p = job.progress * 100;
+  if (p < 3) return { no: "01", title: "Klasör açılıyor", line: "Drive kapısı aralanıyor..." };
+  if (p < 25) return { no: "02", title: "Fotoğraflar sayılıyor", line: "Bir, iki, üç... binlerce." };
+  if (p < 60) return { no: "03", title: "Yüzler aranıyor", line: "Herkes kadraja girdi mi?" };
+  if (p < 90) return { no: "04", title: "Kareler eşleştiriliyor", line: "Sabır, bu kısım biraz uzun sürüyor." };
+  return { no: "04", title: "Son rötuşlar", line: "Neredeyse bitti, paniğe gerek yok." };
+}
 
 export default function NewEventPage() {
   const router = useRouter();
   const { me, loading: authLoading } = useAuth();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
-  const [eventDate, setEventDate] = useState("");
+
   const [url, setUrl] = useState("");
-  const [includeSubfolders, setIncludeSubfolders] = useState(true);
   const [job, setJob] = useState<Job | null>(null);
+  const [event, setEvent] = useState<Event | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     void ensureCsrf();
   }, []);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Indexleme sırasında job durumunu yokla; bitince dur.
+  useEffect(() => {
+    if (!job || TERMINAL.includes(job.status)) return;
+    const id = window.setInterval(async () => {
+      try {
+        const current = await getJob(job.id);
+        setJob(current);
+      } catch {
+        // Geçici ağ hatası: bir sonraki turda tekrar dene.
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [job?.id, job?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const clean = url.trim();
+    if (!clean) return;
     setBusy(true);
     setError("");
     try {
-      const { event: created, jobId } = await createEvent({
-        title,
-        description,
-        location,
-        event_date: eventDate || undefined,
-        url,
-        include_subfolders: includeSubfolders,
-      });
-      if (jobId) {
-        const initial = await getJob(jobId);
-        setJob(initial);
-        void (async () => {
-          for (let i = 0; i < 180; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            try {
-              const current = await getJob(jobId);
-              setJob(current);
-              if (["done", "failed", "canceled"].includes(current.status)) break;
-            } catch {
-              // geçici ağ hatası
-            }
-          }
-        })();
-      }
-      router.push(`/events/${created.slug}`);
-      router.refresh();
+      const created = await createEvent({ url: clean });
+      setEvent(created.event);
+      setJob(created.jobId ? await getJob(created.jobId) : null);
+      setStartedAt(Date.now());
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Etkinlik oluşturulamadı.");
+      setError(
+        cause instanceof ApiError ? cause.message : "Etkinlik oluşturulamadı. Tekrar dene.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  function reset() {
+    setJob(null);
+    setEvent(null);
+    setUrl("");
+    setError("");
+    setStartedAt(null);
+  }
+
   if (authLoading) {
-    return <main className="container page-pad"><p className="caption">Yükleniyor...</p></main>;
+    return (
+      <main className="container page-pad">
+        <p className="caption">Yükleniyor...</p>
+      </main>
+    );
   }
 
   if (!me) {
@@ -72,7 +108,7 @@ export default function NewEventPage() {
         <div className="empty-state">
           <div className="empty-mark">↗</div>
           <h3>Etkinlik eklemek için giriş yap.</h3>
-          <p>Hesabınla etkinlik ekleyebilir, katılımcıların fotoğrafını bulmasını sağlayabilirsin.</p>
+          <p>Drive linkini bırak, gerisini yüz tanıma sistemi halletsın.</p>
           <div className="hero-actions" style={{ justifyContent: "center" }}>
             <Link className="btn btn-primary" href="/login">Giriş yap</Link>
             <Link className="btn" href="/register">Kayıt ol</Link>
@@ -82,129 +118,171 @@ export default function NewEventPage() {
     );
   }
 
+  const phase = phaseFor(job);
+  const pct = job ? Math.min(100, Math.round(job.progress * 100)) : 0;
+  const elapsed = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
+  const done = job?.status === "done";
+  const failed = job?.status === "failed" || job?.status === "canceled";
+  const time = mmss(elapsed);
+
+  const logs = job
+    ? [
+        `[00:00] İŞ ${job.id.slice(0, 8).toUpperCase()} KUYUĞA ALINDI`,
+        `[00:01] DRIVE KLASÖRÜ BAĞLANDI`,
+        job.total > 0 ? `[00:02] ${job.total} FOTOĞRAF TESPİT EDİLDİ` : `[00:02] KLASÖR TARANIYOR`,
+        job.processed > 0 ? `[${time}] ${job.processed} FOTOĞRAF İŞLENDİ` : null,
+        done ? `[${time}] İNDEKS GÜNCELLENDİ · TAMAMLANDI` : null,
+        failed ? `[${time}] İŞ DURDURULDU` : null,
+      ].filter(Boolean) as string[]
+    : [];
+
   return (
-    <main className="container page-pad">
-      <nav className="breadcrumb" aria-label="Konum">
+    <main className="container page-pad new-event-page">
+      <nav className="breadcrumb" aria-label="Gezinme">
         <Link href="/">ETKİNLİKLER</Link>
         <span>/</span>
         <span>YENİ ETKİNLİK</span>
       </nav>
 
-      <div className="section-head">
-        <div>
-          <div className="eyebrow">02 / YENİ KAYIT</div>
-          <h1 className="section-title">Etkinlik ekle</h1>
-        </div>
-        <p className="section-lead">
-          Fotoğrafların bulunduğu Drive klasörünü bağla; yüz tanıma arka planda
-          çalışsın ve katılımcılar kendi fotoğraflarını bulsun.
-        </p>
-      </div>
+      {!job ? (
+        <>
+          <div className="section-head">
+            <div>
+              <div className="eyebrow">02 / YENİ ETKİNLİK</div>
+              <h1 className="section-title">Etkinliği bağla.</h1>
+            </div>
+            <p className="section-lead">
+              Tek bir Drive linki. Başlık, fotoğraf sayısı ve yükleme tarihi
+              klasörden otomatik okunur; sen sadece yüz tanımanın başlamasını beklersin.
+            </p>
+          </div>
 
-      <div className="form-layout">
-        <form className="form-panel" onSubmit={submit}>
-          {error && <div className="alert alert-error">{error}</div>}
-
-          <div className="form-grid">
-            <div className="field full">
-              <label className="label" htmlFor="title">Etkinlik adı *</label>
-              <input
-                id="title"
-                className="input"
-                required
-                minLength={3}
-                maxLength={160}
-                placeholder="Örn. Yaz Festivali 2026"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
+          <div className="link-panel">
+            <div className="link-panel-head">
+              <span className="step-no">01</span>
+              <div>
+                <div className="step-title">Drive klasörünün linki</div>
+                <div className="step-desc">
+                  Klasör &quot;Bağlantıya sahip herkes&quot; olarak paylaşılmalı.
+                  Başka bir şey girmene gerek yok.
+                </div>
+              </div>
             </div>
 
-            <div className="field full">
-              <label className="label" htmlFor="description">Açıklama</label>
-              <textarea
-                id="description"
-                className="input"
-                maxLength={4000}
-                placeholder="Etkinlik hakkında kısa bir not..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="date">Tarih</label>
-              <input
-                id="date"
-                className="input"
-                type="date"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label className="label" htmlFor="location">Konum</label>
-              <input
-                id="location"
-                className="input"
-                maxLength={200}
-                placeholder="Şehir / mekân"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-
-            <div className="field full">
-              <label className="label" htmlFor="url">Drive klasör linki *</label>
-              <input
-                id="url"
-                className="input"
-                type="url"
-                required
-                placeholder="https://drive.google.com/drive/folders/..."
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-              <span className="meta">Klasör &quot;Bağlantıya sahip herkes&quot; olarak paylaşılmalı.</span>
-            </div>
-
-            <div className="field full">
-              <label className="check-label">
+            <form onSubmit={submit}>
+              {error && <div className="alert alert-error">{error}</div>}
+              <div className="link-field">
+                <span className="link-prefix" aria-hidden="true">⌖</span>
                 <input
-                  type="checkbox"
-                  checked={includeSubfolders}
-                  onChange={(e) => setIncludeSubfolders(e.target.checked)}
+                  className="link-input"
+                  type="url"
+                  required
+                  autoFocus
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  aria-label="Drive klasör linki"
                 />
-                Alt klasörleri de tara
-              </label>
+                <button className="btn btn-primary link-submit" type="submit" disabled={busy || !url.trim()}>
+                  {busy ? "Bağlanıyor..." : "Taramayı başlat →"}
+                </button>
+              </div>
+            </form>
+
+            <div className="auto-grid">
+              <div><b>BAŞLIK</b><span>Drive klasör adı</span></div>
+              <div><b>FOTOĞRAF</b><span>Klasörden sayılır</span></div>
+              <div><b>YÜKLEME TARİHİ</b><span>Drive metadata</span></div>
+              <div><b>THUMBNAIL</b><span>Otomatik üretilir</span></div>
             </div>
           </div>
 
-          <button className="btn btn-primary submit-wide" type="submit" disabled={busy}>
-            {busy ? "Oluşturuluyor..." : "Etkinliği oluştur →"}
-          </button>
-
-          {job && (
-            <div className="job-status">
-              <div className="meta">Tarama: {job.status} · {job.processed}/{job.total || "?"}</div>
-              <div className="progress"><span style={{ width: `${Math.round(job.progress * 100)}%` }} /></div>
-            </div>
-          )}
-        </form>
-
-        <aside className="form-aside">
-          <div className="aside-label">NASIL ÇALIŞIR</div>
-          <ol className="how-list">
-            <li><b>01</b><span>Klasörü bağla</span><p>Etkinlikte çekilen fotoğrafların Drive adresini gir.</p></li>
-            <li><b>02</b><span>Taramayı başlat</span><p>Yüzler arka planda tespit edilir, fotoğraflar indekslenir.</p></li>
-            <li><b>03</b><span>Etkinlik yayında</span><p>Sayfa herkese açılır, katılımcılar kendi fotoğraflarını bulur.</p></li>
-          </ol>
-          <div className="aside-note">
-            Yüz görüntüleri saklanmaz; yalnızca eşleştirme için geçici olarak işlenir.
+          <div className="aside-note new-note">
+            İpucu: Etkinlikten sonra klasöre yeni fotoğraf eklersen tekrar taramayı
+            başlatman yeterli; yüzler güncellenir.
           </div>
-        </aside>
-      </div>
+        </>
+      ) : (
+        <div className="index-console">
+          <div className="console-head">
+            <div className="console-status">
+              <span className={`console-dot${done ? " is-done" : failed ? " is-fail" : ""}`} />
+              {done ? "TAMAMLANDI" : failed ? "DURDURULDU" : "INDEXLEME AKTİF"}
+            </div>
+            <div className="console-timer">GEÇEN {time}</div>
+          </div>
+
+          <div className="console-body">
+            <div className="scan-stage" aria-hidden="true">
+              <div className="scan-grid" />
+              <div className="scan-frame scan-frame-a" />
+              <div className="scan-frame scan-frame-b" />
+              <div className="scan-crosshair" />
+              <div className="scan-beam" />
+              <div className="scan-counter">
+                <b>{String(job.processed).padStart(4, "0")}</b>
+                <span>FOTOĞRAF</span>
+              </div>
+            </div>
+
+            <div className="console-info">
+              <div className="phase-index">{phase.no} / 05</div>
+              <h2 key={phase.title} className="phase-title">{phase.title}</h2>
+              <p key={phase.line} className="phase-line">{phase.line}</p>
+
+              <div className="index-meter">
+                <div className="meter-head">
+                  <span>İLERLEME</span>
+                  <b>{pct}%</b>
+                </div>
+                <div className="meter-track">
+                  <span style={{ width: `${pct}%` }} />
+                </div>
+                <div className="meter-foot">
+                  <span>{job.processed} / {job.total || "?"} fotoğraf</span>
+                  <span>{job.status.toUpperCase()}</span>
+                </div>
+              </div>
+
+              <div className="console-quip">
+                {done
+                  ? "Kahve soğumadan bitti."
+                  : "Bu biraz sürebilir. Kahve koy, hatta ikincisini de koyabilirsin."}
+              </div>
+
+              {done && event && (
+                <div className="console-actions">
+                  <Link className="btn btn-primary" href={`/events/${event.slug}`}>
+                    Etkinliği aç →
+                  </Link>
+                  <button className="btn" type="button" onClick={reset}>
+                    Yeni etkinlik
+                  </button>
+                </div>
+              )}
+
+              {failed && (
+                <div className="console-actions">
+                  <button className="btn btn-primary" type="button" onClick={reset}>
+                    Tekrar dene
+                  </button>
+                  {job.error && <span className="meta">{job.error}</span>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="console-log">
+            <div className="log-label">CANLI KAYIT</div>
+            <div className="log-lines">
+              {logs.map((line, i) => (
+                <div key={`${line}-${i}`} className="log-line">{line}</div>
+              ))}
+              {!done && !failed && <div className="log-cursor">_</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

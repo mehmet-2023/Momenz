@@ -56,7 +56,7 @@ function LoginContent() {
         <div className="auth-panel">
           <div className="auth-card">
             <div className="eyebrow">01 / GİRİŞ</div>
-            <h1 className="auth-title">Giriş yap</h1>
+            <h1 className="auth-title" data-text="Giriş yap">Giriş yap</h1>
 
             {registered && (
               <div className="alert">Kaydın oluşturuldu. Şimdi giriş yapabilirsin.</div>

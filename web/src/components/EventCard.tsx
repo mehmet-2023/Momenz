@@ -21,7 +21,9 @@ export default function EventCard({ event, view = "grid" }: Props) {
       <div className="event-card-body">
         <div className="event-card-title">{event.title}</div>
         <div className="event-card-meta">
-          {event.location || "Konum belirtilmedi"}
+          {event.date_label
+            ? `${event.date_label} · Drive yükleme`
+            : "Drive'dan yüklendi"}
         </div>
         {event.description && view === "list" && (
           <p className="event-card-desc">{event.description}</p>
