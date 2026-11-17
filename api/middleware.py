@@ -6,11 +6,28 @@ import uuid
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response
 
 from .config import Settings
 
 _UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+class HealthExemptTrustedHostMiddleware(TrustedHostMiddleware):
+    """Host kısıtını health/ROOT dışındaki yollarda uygula.
+
+    Render/PaaS internal health probe'ları Host header'ı public domain yerine
+    iç hostname ya da IP ile gönderir. TrustedHost bunu 400 ile reddettiği için
+    deploy health check'e takılıyordu. Sahte Host ile api yollarına erişim
+    hâlâ kapalı; sadece /health ve / muaf.
+    """
+
+    async def __call__(self, scope, receive, send) -> None:  # type: ignore[no-untyped-def]
+        if scope["type"] == "http" and scope.get("path") in {"/health", "/"}:
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

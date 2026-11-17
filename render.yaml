@@ -16,7 +16,7 @@ services:
       - key: MOMENZ_COOKIE_SECURE
         value: true
       - key: MOMENZ_TRUSTED_HOSTS
-        value: momenz-api.onrender.com,www.momenz.com,momenz.com
+        value: momenz.onrender.com,www.momenz.com,momenz.com
       - key: MOMENZ_CORS_ORIGINS
         value: https://www.momenz.com,https://momenz.com
       - key: MOMENZ_WEB_BASE_URL

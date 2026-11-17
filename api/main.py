@@ -8,15 +8,18 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.trustedhost import TrustedHostMiddleware
-
 from core.face_engine import FaceEngine, ensure_models
 
 from .config import Settings, get_settings
 from .db import D1Client, D1Error
 from .deps import get_db
 from .errors import AppError, app_error_handler, unhandled_error_handler
-from .middleware import CSRFMiddleware, RequestIdMiddleware, SecurityHeadersMiddleware
+from .middleware import (
+    CSRFMiddleware,
+    HealthExemptTrustedHostMiddleware,
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+)
 from .repositories import jobs as job_repo
 from .repositories import users as user_repo
 from .routes import auth, folders, images, jobs, search
@@ -97,7 +100,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     # Dıştan içe doğru: TrustedHost en dışta olmalı (Host header injection).
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
+    app.add_middleware(
+        HealthExemptTrustedHostMiddleware, allowed_hosts=settings.trusted_hosts
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -137,6 +142,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 }
             },
         )
+
+    @app.get("/", include_in_schema=False)
+    def root() -> dict[str, str]:
+        return {"service": "momenz-api", "docs": "/docs"}
 
     @app.get("/health", response_model=HealthOut, tags=["system"])
     def health(db: D1Client = Depends(get_db)):
