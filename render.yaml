@@ -1,0 +1,33 @@
+# Render Free Blueprint — API katmanı
+# Model basit olduğu için 512MB yeterli; ağır indexleme worker'da.
+services:
+  - type: web
+    name: momenz-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: MOMENZ_ENVIRONMENT
+        value: prod
+      - key: MOMENZ_JWT_SECRET
+        generateValue: true          # Render güvenli secret üretir
+      - key: MOMENZ_COOKIE_SECURE
+        value: true
+      - key: MOMENZ_TRUSTED_HOSTS
+        value: momenz-api.onrender.com,www.momenz.com,momenz.com
+      - key: MOMENZ_CORS_ORIGINS
+        value: https://www.momenz.com,https://momenz.com
+      - key: MOMENZ_WEB_BASE_URL
+        value: https://www.momenz.com
+      - key: MOMENZ_D1_ACCOUNT_ID
+        sync: false
+      - key: MOMENZ_D1_DATABASE_ID
+        sync: false
+      - key: MOMENZ_D1_API_TOKEN
+        sync: false
+      - key: MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: MOMENZ_RESEND_API_KEY
+        sync: false

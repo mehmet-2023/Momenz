@@ -1,0 +1,27 @@
+# Secrets
+.streamlit/secrets.toml
+credentials.json
+*.pem
+.env
+.env.bak
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.python-version
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local dev tooling
+indexer.py
+
+# Local indexes and exports
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+index_export_*.sqlite
