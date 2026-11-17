@@ -82,7 +82,9 @@ img { max-width: 100%; }
 .hero {
   position: relative; overflow: hidden;
   background: var(--ink); color: var(--paper);
-  padding: 76px 24px 0;
+  padding: 104px 24px 92px;
+  min-height: 88vh;
+  display: flex; align-items: center;
 }
 .hero-grid {
   position: absolute; inset: -20px; pointer-events: none;
@@ -124,8 +126,7 @@ img { max-width: 100%; }
   letter-spacing: .12em; color: #fff;
 }
 .hero-inner {
-  position: relative; z-index: 2; max-width: 1120px; margin: 0 auto;
-  padding-bottom: 64px;
+  position: relative; z-index: 2; max-width: 1120px; width: 100%; margin: 0 auto;
   transform: translate(calc(var(--mx, 0) * 5px), calc(var(--my, 0) * 5px));
   transition: transform .3s var(--ease);
 }
@@ -800,8 +801,7 @@ textarea.input { min-height: 120px; resize: vertical; }
 }
 
 @media (max-width: 700px) {
-  .hero { padding: 52px 18px 0; }
-  .hero-inner { padding-bottom: 44px; }
+  .hero { padding: 72px 18px 64px; min-height: 86svh; }
   .hero-lead { font-size: .9rem; }
   .hero-stats { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; }
   .hero-actions { margin-bottom: 40px; }
