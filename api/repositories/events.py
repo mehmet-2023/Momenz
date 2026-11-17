@@ -42,7 +42,6 @@ def _to_out(row: dict, viewer_id: str = "") -> dict[str, Any]:
         "slug": str(row.get("slug") or ""),
         "title": str(row.get("title") or "Etkinlik"),
         "description": str(row.get("description") or ""),
-        "category": str(row.get("category") or "diger"),
         "location": str(row.get("location") or ""),
         "event_date": row.get("event_date"),
         "date_label": _date_label(row.get("event_date")),
@@ -68,7 +67,6 @@ def list_all(
     viewer_id: str = "",
     *,
     upcoming: bool = False,
-    category: str | None = None,
     query: str | None = None,
     limit: int = 24,
     offset: int = 0,
@@ -79,9 +77,6 @@ def list_all(
     if owner_id:
         where.append("e.owner_id = ?")
         params.append(owner_id)
-    if category and category != "tumu":
-        where.append("e.category = ?")
-        params.append(category)
     if query:
         like = f"%{query.strip()}%"
         where.append("(e.title LIKE ? OR e.location LIKE ? OR e.description LIKE ?)")
@@ -100,7 +95,6 @@ def count_all(
     db: D1Client,
     *,
     upcoming: bool = False,
-    category: str | None = None,
     query: str | None = None,
     owner_id: str | None = None,
 ) -> int:
@@ -109,9 +103,6 @@ def count_all(
     if owner_id:
         where.append("e.owner_id = ?")
         params.append(owner_id)
-    if category and category != "tumu":
-        where.append("e.category = ?")
-        params.append(category)
     if query:
         like = f"%{query.strip()}%"
         where.append("(e.title LIKE ? OR e.location LIKE ? OR e.description LIKE ?)")
@@ -153,16 +144,15 @@ def create(
     folder_key: str,
     title: str,
     description: str,
-    category: str,
     location: str,
     event_date: str | None,
 ) -> None:
     db.execute(
         """
         INSERT INTO events
-            (id, slug, owner_id, folder_key, title, description, category,
+            (id, slug, owner_id, folder_key, title, description,
              location, event_date, is_public, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
         """,
         (
             event_id,
@@ -171,7 +161,6 @@ def create(
             folder_key,
             title,
             description,
-            category,
             location,
             event_date,
         ),

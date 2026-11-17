@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Space_Mono } from "next/font/google";
+import { AuthProvider } from "@/components/AuthProvider";
+import SiteFooter from "@/components/SiteFooter";
+import SiteHeader from "@/components/SiteHeader";
 import "./globals.css";
 
 const inter = Inter({
@@ -26,7 +29,13 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="tr" className={`${inter.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          <SiteHeader />
+          <div className="app-body">{children}</div>
+          <SiteFooter />
+        </AuthProvider>
+      </body>
     </html>
   );
 }

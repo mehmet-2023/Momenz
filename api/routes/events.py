@@ -29,7 +29,6 @@ public_router = APIRouter(prefix="/public", tags=["public"])
 @router.get("", response_model=EventListOut)
 def list_events(
     upcoming: bool = Query(default=False),
-    category: str | None = Query(default=None),
     q: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -40,7 +39,6 @@ def list_events(
         db,
         viewer.id if viewer else "",
         upcoming=upcoming,
-        category=category,
         query=q,
         limit=limit,
         offset=offset,

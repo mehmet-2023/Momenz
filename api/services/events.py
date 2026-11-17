@@ -28,7 +28,6 @@ def list_events(
     viewer_id: str = "",
     *,
     upcoming: bool = False,
-    category: str | None = None,
     query: str | None = None,
     limit: int = 24,
     offset: int = 0,
@@ -37,16 +36,13 @@ def list_events(
         db,
         viewer_id,
         upcoming=upcoming,
-        category=category,
         query=query,
         limit=limit,
         offset=offset,
     )
     return EventListOut(
         items=[EventOut(**item) for item in items],
-        total=repo.count_all(
-            db, upcoming=upcoming, category=category, query=query
-        ),
+        total=repo.count_all(db, upcoming=upcoming, query=query),
     )
 
 
@@ -81,7 +77,6 @@ def create_event(
         folder_key=folder.key,
         title=payload.title.strip(),
         description=payload.description.strip(),
-        category=payload.category.strip() or "diger",
         location=payload.location.strip(),
         event_date=payload.event_date or None,
     )

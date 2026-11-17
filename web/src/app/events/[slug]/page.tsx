@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import FaceSearch from "@/components/FaceSearch";
-import SiteHeader from "@/components/SiteHeader";
+import { useAuth } from "@/components/AuthProvider";
 import {
   ApiError,
   auth,
@@ -15,16 +15,19 @@ import {
   joinEvent,
   leaveEvent,
 } from "@/lib/api";
-import type { Event, EventPhoto, User } from "@/lib/types";
+import type { Event, EventPhoto } from "@/lib/types";
 
 export default function EventDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
+  const { me, setMe } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
-  const [me, setMe] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [lightbox, setLightbox] = useState<EventPhoto | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,7 +35,7 @@ export default function EventDetailPage() {
     try {
       const [item, gallery] = await Promise.all([
         getEvent(slug),
-        getEventPhotos(slug),
+        getEventPhotos(slug, 40),
       ]);
       setEvent(item);
       setPhotos(gallery.items);
@@ -45,76 +48,118 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     void ensureCsrf();
-    auth.me().then(setMe).catch(() => setMe(null));
-  }, []);
+    void auth.me().then(setMe).catch(() => setMe(null));
+  }, [setMe]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!lightbox) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightbox(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
+
   async function toggleJoin() {
-    if (!event || !me) return;
+    if (!event) return;
+    setBusy(true);
+    setNotice("");
     try {
-      if (event.is_attending) await leaveEvent(event.slug);
-      else await joinEvent(event.slug);
+      if (event.is_attending) {
+        await leaveEvent(event.slug);
+        setNotice("Etkinlikten ayrıldın.");
+      } else {
+        await joinEvent(event.slug);
+        setNotice("Etkinliğe katıldın. Arşiv artık senin de.");
+      }
       await load();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "İşlem başarısız.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setNotice("Bağlantı kopyalandı.");
+    } catch {
+      setNotice("Bağlantı kopyalanamadı.");
     }
   }
 
   return (
-    <>
-      <SiteHeader />
-      <main className="container">
-        {error && <div className="alert alert-error">{error}</div>}
-        {loading ? (
-          <p className="caption">Yükleniyor...</p>
-        ) : !event ? (
-          <div className="no-image">Etkinlik bulunamadı.</div>
-        ) : (
-          <>
-            <section className="event-hero">
-              {event.cover_url && (
-                <img className="event-hero-cover" src={event.cover_url} alt="" />
-              )}
-              <div className="event-hero-body">
-                <span className="event-date-badge">{event.date_label || "Tarih yakında"}</span>
-                <h1>{event.title}</h1>
-                <div className="event-meta-line">
-                  <span>{event.location || "Konum belirtilmedi"}</span>
-                  <span>{event.image_count} fotoğraf</span>
-                  <span>{event.face_count} yüz</span>
-                  <span>{event.attendee_count} katılımcı</span>
-                </div>
-                {event.description && <p className="event-desc">{event.description}</p>}
-                <div className="event-actions">
-                  {me ? (
-                    <button className="btn" type="button" onClick={toggleJoin}>
-                      {event.is_attending ? "Katılımı bırak" : "Etkinliğe katıl"}
-                    </button>
-                  ) : (
-                    <Link className="btn" href="/login">Katılmak için giriş yap</Link>
-                  )}
-                  <Link className="btn" href="/">← Etkinlikler</Link>
-                </div>
-              </div>
-            </section>
+    <main className="container detail-page">
+      <nav className="breadcrumb" aria-label="Konum">
+        <Link href="/">ETKİNLİKLER</Link>
+        <span>/</span>
+        <span>{event?.title || "YÜKLENİYOR"}</span>
+      </nav>
 
-            <section>
-              <div className="step-head">
-                <div className="step-no">01</div>
+      {error && <div className="alert alert-error">{error}</div>}
+      {notice && <div className="alert">{notice}</div>}
+
+      {loading ? (
+        <div className="detail-skeleton">
+          <div className="skeleton skeleton-hero" />
+          <div className="skeleton skeleton-line" />
+        </div>
+      ) : !event ? (
+        <div className="empty-state">
+          <div className="empty-mark">404</div>
+          <h3>Etkinlik bulunamadı.</h3>
+          <Link className="btn btn-primary" href="/">Etkinliklere dön</Link>
+        </div>
+      ) : (
+        <div className="detail-layout">
+          <div className="detail-main">
+            <div className="detail-cover">
+              {event.cover_url ? (
+                <img src={event.cover_url} alt="" />
+              ) : (
+                <div className="detail-cover-empty">BU ETKİNLİĞİN KAPAĞI YOK</div>
+              )}
+            </div>
+
+            <div className="detail-heading">
+              <div className="eyebrow">{event.date_label || "TARİH YAKINDA"}</div>
+              <h1>{event.title}</h1>
+              {event.location && (
+                <div className="detail-location">⌖ {event.location}</div>
+              )}
+              {event.description && (
+                <p className="detail-desc">{event.description}</p>
+              )}
+            </div>
+
+            <section className="gallery-section">
+              <div className="section-head compact">
                 <div>
-                  <div className="step-title">Fotoğraf arşivi</div>
-                  <div className="step-desc">Bu etkinlikten {photos.length} fotoğraf önizlemesi.</div>
+                  <div className="eyebrow">01 / ARŞİV</div>
+                  <h2 className="section-title small">Fotoğraflar</h2>
                 </div>
+                <span className="meta">{photos.length} önizleme</span>
               </div>
               {photos.length === 0 ? (
-                <div className="no-image">Henüz fotoğraf yüklenmedi.</div>
+                <div className="no-image">Henüz fotoğraf yüklenmedi. Tarama tamamlandığında burada görünecek.</div>
               ) : (
                 <div className="photo-grid">
                   {photos.map((photo) => (
-                    <img key={photo.file_id} src={photo.thumb_url} alt={photo.name} loading="lazy" />
+                    <button
+                      key={photo.file_id}
+                      type="button"
+                      className="photo-tile"
+                      onClick={() => setLightbox(photo)}
+                      aria-label={`${photo.name} fotoğrafını büyüt`}
+                    >
+                      <img src={photo.thumb_url} alt={photo.name} loading="lazy" />
+                      <span className="photo-index">+</span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -122,14 +167,72 @@ export default function EventDetailPage() {
 
             <div className="rule" />
             <FaceSearch folderKey={event.folder_key} />
-          </>
-        )}
+          </div>
 
-        <footer className="footer">
-          <span>BY OCAL · MOMENZ</span>
-          <span>Üçüncü taraf yüz tanıma servisi kullanılmaz · Sonuçları gözle doğrula</span>
-        </footer>
-      </main>
-    </>
+          <aside className="detail-aside">
+            <div className="aside-card">
+              <div className="aside-label">KATILIM</div>
+              {event.is_owner ? (
+                <div className="aside-owner">Bu etkinliği sen ekledin.</div>
+              ) : me ? (
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={toggleJoin}
+                  disabled={busy}
+                >
+                  {busy
+                    ? "İşleniyor..."
+                    : event.is_attending
+                      ? "Katılımı bırak"
+                      : "Etkinliğe katıl"}
+                </button>
+              ) : (
+                <Link className="btn btn-primary" href="/login">
+                  Katılmak için giriş yap
+                </Link>
+              )}
+              <div className="aside-attendees">
+                <b>{event.attendee_count}</b> katılımcı
+              </div>
+            </div>
+
+            <div className="aside-card">
+              <div className="aside-label">ETKİNLİK BİLGİLERİ</div>
+              <dl className="fact-list">
+                <div><dt>Tarih</dt><dd>{event.date_label || "—"}</dd></div>
+                <div><dt>Konum</dt><dd>{event.location || "—"}</dd></div>
+                <div><dt>Fotoğraf</dt><dd>{event.image_count}</dd></div>
+                <div><dt>Yüz</dt><dd>{event.face_count}</dd></div>
+                <div><dt>Ekleyen</dt><dd>{event.is_owner ? "Sen" : "Topluluk"}</dd></div>
+              </dl>
+            </div>
+
+            <div className="aside-card">
+              <div className="aside-label">PAYLAŞ</div>
+              <button className="btn" type="button" onClick={copyLink} style={{ width: "100%" }}>
+                Bağlantıyı kopyala
+              </button>
+              <p className="aside-note">
+                Arşiv herkese açık. Bağlantıyı paylaşarak daha fazla kişinin kendi fotoğrafını bulmasını sağla.
+              </p>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="lightbox" role="dialog" aria-modal="true" onClick={() => setLightbox(null)}>
+          <button className="lightbox-close" type="button" onClick={() => setLightbox(null)} aria-label="Kapat">
+            ✕
+          </button>
+          <img
+            src={`${lightbox.thumb_url}${lightbox.thumb_url.includes("?") ? "&" : "?"}size=1024`}
+            alt={lightbox.name}
+          />
+          <div className="lightbox-caption">{lightbox.name} · ESC ile kapat</div>
+        </div>
+      )}
+    </main>
   );
 }

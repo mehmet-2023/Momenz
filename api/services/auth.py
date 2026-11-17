@@ -5,23 +5,17 @@ from datetime import datetime, timezone
 
 from ..config import Settings
 from ..db import D1Client
-from ..errors import Conflict, Forbidden, InvalidCredentials, NotFound, Unauthorized, UpstreamError
+from ..errors import Forbidden, InvalidCredentials, Unauthorized
 from ..repositories import users as repo
-from ..schemas import (
-    LoginIn,
-    MessageOut,
-    RegisterIn,
-    TokenPair,
-    UserOut,
-)
+from ..schemas import LoginIn, MessageOut, RegisterIn, TokenPair, UserOut
 from ..security import (
     create_access_token,
     create_refresh_token,
     decode_token,
     hash_password,
     needs_rehash,
-    new_id,
     new_csrf_token,
+    new_id,
     token_fingerprint,
     verify_password,
 )
@@ -44,62 +38,26 @@ def _user_out(row: dict) -> UserOut:
 
 
 def register(db: D1Client, settings: Settings, payload: RegisterIn) -> MessageOut:
+    """Kayıt anında hesap kullanıma açılır; e-posta doğrulaması yoktur.
+
+    E-posta yalnızca 'şifremi unuttum' akışında kullanılır (bkz. mail.py).
+    """
     email = str(payload.email).strip().lower()
     if repo.get_by_email(db, email):
         # Kullanıcı varlığını doğrudan belli etmeyelim.
         return MessageOut(
-            message="Bu e-posta ile bir kayıt oluşturulduysa doğrulama bağlantısı gönderildi."
+            message="Bu e-posta ile bir kayıt varsa giriş yapabilirsin."
         )
 
-    user_id = new_id()
     repo.create_user(
         db,
-        user_id=user_id,
+        user_id=new_id(),
         email=email,
         name=payload.name,
         password_hash=hash_password(payload.password),
+        email_verified=True,
     )
-
-    raw, fingerprint, _ = create_refresh_token(settings, user_id)
-    import jwt
-
-    claims = decode_token(settings, raw, "refresh")
-    claims["type"] = "verify_email"
-    from datetime import timedelta
-
-    now = datetime.now(timezone.utc)
-    claims["exp"] = now + timedelta(hours=settings.verification_ttl_hours)
-    raw = jwt.encode(claims, settings.jwt_secret, algorithm=settings.jwt_algorithm)
-    repo.create_verification_token(
-        db, new_id(), user_id, "verify_email", token_fingerprint(raw),
-        settings.verification_ttl_hours,
-    )
-
-    link = settings.mail_verify_url.format(token=raw)
-    sent = send_mail(
-        settings,
-        email,
-        "Momenz — e-postanı doğrula",
-        f"E-postanı doğrulamak için bağlantıyı aç:\n\n{link}\n\n"
-        "Bu bağlantı sınırlı süre geçerlidir.",
-    )
-    if not sent:
-        log.warning("Doğrulama maili gönderilemedi (user=%s)", user_id)
-
-    return MessageOut(
-        message="Kayıt oluşturuldu. E-postanı doğrulayarak giriş yapabilirsin."
-    )
-
-
-def verify_email(db: D1Client, settings: Settings, token: str) -> MessageOut:
-    claims = decode_token(settings, token, "verify_email")
-    row = repo.consume_verification_token(
-        db, token_fingerprint(token), "verify_email"
-    )
-    if not row or str(row.get("user_id")) != str(claims.get("sub")):
-        raise Unauthorized("Doğrulama bağlantısı geçersiz veya kullanılmış.")
-    repo.set_email_verified(db, str(row["user_id"]))
-    return MessageOut(message="E-posta doğrulandı. Şimdi giriş yapabilirsin.")
+    return MessageOut(message="Kayıt oluşturuldu. Şimdi giriş yapabilirsin.")
 
 
 def login(db: D1Client, settings: Settings, payload: LoginIn) -> TokenPair:
@@ -113,17 +71,11 @@ def login(db: D1Client, settings: Settings, payload: LoginIn) -> TokenPair:
 
     if not int(row.get("is_active") or 0):
         raise Forbidden("Hesap devre dışı bırakılmış.")
-    if not int(row.get("email_verified") or 0):
-        raise Forbidden("Önce e-posta adresini doğrula.")
 
     user = _user_out(row)
-    access, access_ttl = create_access_token(
-        settings, user.id, user.email, user.role
-    )
+    access, access_ttl = create_access_token(settings, user.id, user.email, user.role)
     refresh, fingerprint, expires_at = create_refresh_token(settings, user.id)
-    from ..security import new_id as _new_id
-
-    repo.store_refresh_token(db, _new_id(), user.id, fingerprint, expires_at)
+    repo.store_refresh_token(db, new_id(), user.id, fingerprint, expires_at)
     repo.update_last_login(db, user.id)
     return TokenPair(
         access_token=access,
@@ -183,24 +135,31 @@ def logout_all(db: D1Client, user_id: str) -> MessageOut:
 
 
 def request_password_reset(db: D1Client, settings: Settings, email: str) -> MessageOut:
+    """Tek mail akışı: şifreyi unutan kullanıcıya sıfırlama bağlantısı gönderir."""
     generic = MessageOut(
         message="Bu e-posta kayıtlıysa şifre sıfırlama bağlantısı gönderildi."
     )
-    row = repo.get_by_email(db, email)
+    row = repo.get_by_email(db, email.strip().lower())
     if not row:
         return generic
-    raw, fingerprint, _ = create_refresh_token(settings, str(row["id"]))
+
     import jwt
     from datetime import timedelta
 
+    raw, _, _ = create_refresh_token(settings, str(row["id"]))
     claims = decode_token(settings, raw, "refresh")
     claims["type"] = "password_reset"
     claims["exp"] = datetime.now(timezone.utc) + timedelta(
         hours=settings.verification_ttl_hours
     )
     raw = jwt.encode(claims, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
     repo.create_verification_token(
-        db, new_id(), str(row["id"]), "password_reset", token_fingerprint(raw),
+        db,
+        new_id(),
+        str(row["id"]),
+        "password_reset",
+        token_fingerprint(raw),
         settings.verification_ttl_hours,
     )
     link = settings.mail_reset_url.format(token=raw)
@@ -209,7 +168,7 @@ def request_password_reset(db: D1Client, settings: Settings, email: str) -> Mess
         str(row["email"]),
         "Momenz — şifre sıfırlama",
         f"Şifreni sıfırlamak için:\n\n{link}\n\n"
-        "Bu bağlantıyı kimseyle paylaşma.",
+        "Bu bağlantıyı kimseyle paylaşma. Kısa süre sonra geçersiz olur.",
     )
     return generic
 
@@ -228,5 +187,5 @@ def reset_password(
 
 
 def csrf_token() -> str:
-    """GET /auth/csrf için公开 token (httpOnly olmayan cookie'ye yazılır)."""
+    """GET /auth/csrf için açık token (httpOnly olmayan cookie'ye yazılır)."""
     return new_csrf_token()

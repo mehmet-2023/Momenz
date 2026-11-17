@@ -84,7 +84,6 @@ class EventOut(BaseModel):
     slug: str
     title: str
     description: str = ""
-    category: str = "diger"
     location: str = ""
     event_date: str | None = None
     date_label: str | None = None
@@ -103,7 +102,6 @@ class EventOut(BaseModel):
 class EventCreateIn(BaseModel):
     title: str = Field(min_length=3, max_length=160)
     description: str = Field(default="", max_length=4000)
-    category: str = Field(default="diger", max_length=40)
     location: str = Field(default="", max_length=200)
     event_date: str | None = Field(default=None, max_length=40)
     url: str = Field(min_length=10, max_length=1000)

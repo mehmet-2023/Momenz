@@ -44,15 +44,6 @@ def register(
     return service.register(db, settings, payload)
 
 
-@router.post("/verify", response_model=MessageOut)
-def verify_email(
-    token: str = Query(min_length=10),
-    db: D1Client = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> MessageOut:
-    return service.verify_email(db, settings, token)
-
-
 @router.post("/login", response_model=TokenPair)
 def login(
     payload: LoginIn,

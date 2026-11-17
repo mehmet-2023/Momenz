@@ -12,8 +12,8 @@ log = logging.getLogger("momenz.mail")
 def send_mail(settings: Settings, to: str, subject: str, body: str) -> bool:
     """Resend varsa gönderir, yoksa geliştirmede konsola yazar.
 
-    Prod'da mail sağlayıcısı yoksa kayıt/e-posta doğrulama akışı çalışmaz;
-    bu bilinçli bir fail-closed davranıştır.
+    Tek kullanım amacı 'şifremi unuttum': kayıt/doğrulama maili gönderilmez.
+    Prod'da API anahtarı yoksa sıfırlama bağlantısı gönderilemez (fail-closed).
     """
     if settings.resend_api_key:
         try:

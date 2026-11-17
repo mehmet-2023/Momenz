@@ -30,6 +30,10 @@ MOMENZ_D1_API_TOKEN=
 # Google Drive (servis hesabı JSON'unu tek satırda yapıştır)
 MOMENZ_GOOGLE_DRIVE_API_KEY=
 MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON=
+
+# Mail — yalnızca "şifremi unuttum" akışı
+MOMENZ_RESEND_API_KEY=
+MOMENZ_MAIL_RESET_URL=https://momenz.vercel.app/sifre-sifirla?token={token}
 """
 
 
@@ -52,11 +56,17 @@ def main() -> None:
         environment=args.environment,
         jwt_secret=secrets.token_urlsafe(48),
         cookie_secure="true" if is_prod else "false",
-        trusted_hosts="momenz.com,www.momenz.com" if is_prod else "localhost,127.0.0.1",
-        cors_origins=(
-            "https://momenz.com" if is_prod else "http://localhost:3000"
+        trusted_hosts=(
+            "momenz.onrender.app,momenz.onrender.com,localhost"
+            if is_prod
+            else "localhost,127.0.0.1"
         ),
-        web_base_url="https://momenz.com" if is_prod else "http://localhost:3000",
+        cors_origins=(
+            "https://momenz.vercel.app" if is_prod else "http://localhost:3000"
+        ),
+        web_base_url=(
+            "https://momenz.vercel.app" if is_prod else "http://localhost:3000"
+        ),
     )
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:

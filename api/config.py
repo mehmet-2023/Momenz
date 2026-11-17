@@ -26,12 +26,12 @@ class Settings(BaseSettings):
     app_name: str = "Momenz API"
     environment: str = "dev"
     debug: bool = False
-    api_base_url: str = "http://localhost:8000"
-    web_base_url: str = "http://localhost:3000"
+    api_base_url: str = "https://momenz.onrender.app"
+    web_base_url: str = "https://momenz.vercel.app"
     # NoDecode: pydantic-settings bu alanları JSON sanıp çözmesin;
     # virgülle ayrılmış env değerini _split_lists kendisi parselesin.
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:3000"]
+        default_factory=lambda: ["https://momenz.vercel.app"]
     )
 
     # ---------------------------------------------------------------- D1
@@ -56,7 +56,14 @@ class Settings(BaseSettings):
     cookie_domain: str | None = None
     cookie_samesite: str = "lax"
     login_rate_limit: int = 10  # dakikadaki deneme sayısı (IP + e-posta)
-    trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+    trusted_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: [
+            "momenz.onrender.app",
+            "momenz.onrender.com",
+            "localhost",
+            "127.0.0.1",
+        ]
+    )
     hsts_max_age: int = 31_536_000
 
     # ---------------------------------------------------------------- Google
@@ -80,8 +87,9 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- mail
     resend_api_key: str = ""
     mail_from: str = "Momenz <no-reply@momenz.com>"
-    mail_verify_url: str = "http://localhost:3000/dogrula?token={token}"
-    mail_reset_url: str = "http://localhost:3000/sifre-sifirla?token={token}"
+    mail_reset_url: str = (
+        "https://momenz.vercel.app/sifre-sifirla?token={token}"
+    )
 
     # ---------------------------------------------------------------- cache
     thumb_cache_dir: str = "/tmp/momenz_thumbs"

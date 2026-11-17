@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS events (
     folder_key TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
-    category TEXT NOT NULL DEFAULT 'diger',
     location TEXT NOT NULL DEFAULT '',
     event_date TEXT,
     cover_file_id TEXT,
@@ -31,7 +30,7 @@ CREATE INDEX IF NOT EXISTS event_attendees_user_idx ON event_attendees (user_id)
 
 -- Mevcut klasörleri etkinliğe çevir (meta JSON alanlarından).
 INSERT OR IGNORE INTO events
-    (id, slug, owner_id, folder_key, title, description, category, location,
+    (id, slug, owner_id, folder_key, title, description, location,
      event_date, is_public, created_at)
 SELECT
     'evt-' || lower(hex(randomblob(8))),
@@ -40,7 +39,6 @@ SELECT
     d.folder_key,
     COALESCE(json_extract(d.meta, '$.folder_title'), 'Etkinlik'),
     '',
-    'diger',
     '',
     json_extract(d.meta, '$.folder_date'),
     1,

@@ -15,12 +15,16 @@ services:
         generateValue: true          # Render güvenli secret üretir
       - key: MOMENZ_COOKIE_SECURE
         value: true
+      - key: MOMENZ_API_BASE_URL
+        value: https://momenz.onrender.app
       - key: MOMENZ_TRUSTED_HOSTS
-        value: momenz.onrender.com,www.momenz.com,momenz.com
+        value: momenz.onrender.app,momenz.onrender.com,localhost
       - key: MOMENZ_CORS_ORIGINS
-        value: https://www.momenz.com,https://momenz.com
+        value: https://momenz.vercel.app
       - key: MOMENZ_WEB_BASE_URL
-        value: https://www.momenz.com
+        value: https://momenz.vercel.app
+      - key: MOMENZ_MAIL_RESET_URL
+        value: https://momenz.vercel.app/sifre-sifirla?token={token}
       - key: MOMENZ_D1_ACCOUNT_ID
         sync: false
       - key: MOMENZ_D1_DATABASE_ID

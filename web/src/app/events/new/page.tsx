@@ -3,18 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import SiteHeader from "@/components/SiteHeader";
-import { ApiError, auth, createEvent, ensureCsrf, getJob } from "@/lib/api";
-import type { Job, User } from "@/lib/types";
-
-const CATEGORIES = ["diger", "muzik", "spor", "sergi", "kampus", "topluluk"];
+import { useAuth } from "@/components/AuthProvider";
+import { ApiError, createEvent, ensureCsrf, getJob } from "@/lib/api";
+import type { Job } from "@/lib/types";
 
 export default function NewEventPage() {
   const router = useRouter();
-  const [me, setMe] = useState<User | null | undefined>(undefined);
+  const { me, loading: authLoading } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("diger");
   const [location, setLocation] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [url, setUrl] = useState("");
@@ -25,7 +22,6 @@ export default function NewEventPage() {
 
   useEffect(() => {
     void ensureCsrf();
-    auth.me().then(setMe).catch(() => setMe(null));
   }, []);
 
   async function submit(event: FormEvent) {
@@ -36,7 +32,6 @@ export default function NewEventPage() {
       const { event: created, jobId } = await createEvent({
         title,
         description,
-        category,
         location,
         event_date: eventDate || undefined,
         url,
@@ -53,12 +48,13 @@ export default function NewEventPage() {
               setJob(current);
               if (["done", "failed", "canceled"].includes(current.status)) break;
             } catch {
-              // geçici hata
+              // geçici ağ hatası
             }
           }
         })();
       }
       router.push(`/events/${created.slug}`);
+      router.refresh();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Etkinlik oluşturulamadı.");
     } finally {
@@ -66,100 +62,149 @@ export default function NewEventPage() {
     }
   }
 
-  if (me === undefined) {
-    return <><SiteHeader /><main className="container"><p className="caption">Yükleniyor...</p></main></>;
+  if (authLoading) {
+    return <main className="container page-pad"><p className="caption">Yükleniyor...</p></main>;
   }
 
   if (!me) {
     return (
-      <>
-        <SiteHeader />
-        <main className="container">
-          <div className="alert">
-            Etkinlik eklemek için <Link href="/login">giriş yap</Link> ya da{" "}
-            <Link href="/register">kayıt ol</Link>.
+      <main className="container page-pad">
+        <div className="empty-state">
+          <div className="empty-mark">↗</div>
+          <h3>Etkinlik eklemek için giriş yap.</h3>
+          <p>Hesabınla arşive etkinlik ekleyebilir, katılımcıları davet edebilirsin.</p>
+          <div className="hero-actions" style={{ justifyContent: "center" }}>
+            <Link className="btn btn-primary" href="/login">Giriş yap</Link>
+            <Link className="btn" href="/register">Kayıt ol</Link>
           </div>
-        </main>
-      </>
+        </div>
+      </main>
     );
   }
 
   return (
-    <>
-      <SiteHeader />
-      <main className="container">
-        <section className="page-intro">
-          <div className="eyebrow">YENİ ETKİNLİK</div>
-          <h1 className="page-title">Etkinlik ekle</h1>
-          <p className="page-lead">
-            Fotoğrafların olduğu Drive klasörünü bağla; yüz taraması arka planda
-            çalışsın. Klasör &quot;Bağlantıya sahip herkes&quot; olarak paylaşılmış olmalı.
-          </p>
-        </section>
+    <main className="container page-pad">
+      <nav className="breadcrumb" aria-label="Konum">
+        <Link href="/">ETKİNLİKLER</Link>
+        <span>/</span>
+        <span>YENİ ETKİNLİK</span>
+      </nav>
 
-        {error && <div className="alert alert-error">{error}</div>}
+      <div className="section-head">
+        <div>
+          <div className="eyebrow">02 / YENİ KAYIT</div>
+          <h1 className="section-title">Etkinlik ekle</h1>
+        </div>
+        <p className="section-lead">
+          Fotoğrafların bulunduğu Drive klasörünü bağla; yüz taraması arka planda
+          çalışsın ve arşiv herkese açılsın.
+        </p>
+      </div>
 
-        <form onSubmit={submit}>
+      <div className="form-layout">
+        <form className="form-panel" onSubmit={submit}>
+          {error && <div className="alert alert-error">{error}</div>}
+
           <div className="form-grid">
             <div className="field full">
-              <label className="label" htmlFor="title">Etkinlik adı</label>
-              <input id="title" className="input" required minLength={3} maxLength={160}
-                value={title} onChange={(e) => setTitle(e.target.value)} />
+              <label className="label" htmlFor="title">Etkinlik adı *</label>
+              <input
+                id="title"
+                className="input"
+                required
+                minLength={3}
+                maxLength={160}
+                placeholder="Örn. Yaz Festivali 2026"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
             </div>
+
             <div className="field full">
               <label className="label" htmlFor="description">Açıklama</label>
-              <textarea id="description" className="input" maxLength={4000}
-                value={description} onChange={(e) => setDescription(e.target.value)} />
+              <textarea
+                id="description"
+                className="input"
+                maxLength={4000}
+                placeholder="Etkinlik hakkında kısa bir not..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
+
             <div className="field">
               <label className="label" htmlFor="date">Tarih</label>
-              <input id="date" className="input" type="date"
-                value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+              <input
+                id="date"
+                className="input"
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+              />
             </div>
+
             <div className="field">
               <label className="label" htmlFor="location">Konum</label>
-              <input id="location" className="input" maxLength={200}
-                value={location} onChange={(e) => setLocation(e.target.value)} />
+              <input
+                id="location"
+                className="input"
+                maxLength={200}
+                placeholder="Şehir / mekân"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
             </div>
-            <div className="field">
-              <label className="label" htmlFor="category">Kategori</label>
-              <select id="category" className="input"
-                value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label className="label" htmlFor="url">Drive klasör linki</label>
-              <input id="url" className="input" type="url" required
-                placeholder="https://drive.google.com/drive/folders/..."
-                value={url} onChange={(e) => setUrl(e.target.value)} />
-            </div>
+
             <div className="field full">
-              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: ".85rem" }}>
-                <input type="checkbox" checked={includeSubfolders}
-                  onChange={(e) => setIncludeSubfolders(e.target.checked)} />
+              <label className="label" htmlFor="url">Drive klasör linki *</label>
+              <input
+                id="url"
+                className="input"
+                type="url"
+                required
+                placeholder="https://drive.google.com/drive/folders/..."
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+              <span className="meta">Klasör &quot;Bağlantıya sahip herkes&quot; olarak paylaşılmalı.</span>
+            </div>
+
+            <div className="field full">
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={includeSubfolders}
+                  onChange={(e) => setIncludeSubfolders(e.target.checked)}
+                />
                 Alt klasörleri de tara
               </label>
             </div>
           </div>
 
-          <button className="btn btn-primary" type="submit" disabled={busy} style={{ maxWidth: 320, marginTop: 12 }}>
-            {busy ? "Oluşturuluyor..." : "Etkinliği oluştur"}
+          <button className="btn btn-primary submit-wide" type="submit" disabled={busy}>
+            {busy ? "Oluşturuluyor..." : "Etkinliği oluştur →"}
           </button>
+
+          {job && (
+            <div className="job-status">
+              <div className="meta">Tarama: {job.status} · {job.processed}/{job.total || "?"}</div>
+              <div className="progress"><span style={{ width: `${Math.round(job.progress * 100)}%` }} /></div>
+            </div>
+          )}
         </form>
 
-        {job && (
-          <div style={{ marginTop: 22, maxWidth: 480 }}>
-            <div className="meta">Tarama: {job.status} · {job.processed}/{job.total || "?"}</div>
-            <div className="progress"><span style={{ width: `${Math.round(job.progress * 100)}%` }} /></div>
+        <aside className="form-aside">
+          <div className="aside-label">NASIL ÇALIŞIR</div>
+          <ol className="how-list">
+            <li><b>01</b><span>Klasörü bağla</span><p>Fotoğraf arşivinin Drive adresini gir.</p></li>
+            <li><b>02</b><span>Taramayı başlat</span><p>Yüzler arka planda tespit edilir, arşiv indekslenir.</p></li>
+            <li><b>03</b><span>Arşiv yayında</span><p>Etkinlik sayfası herkese açılır, katılımcılar fotoğrafını bulur.</p></li>
+          </ol>
+          <div className="aside-note">
+            Yüz görüntüleri saklanmaz; yalnızca eşleştirme için geçici olarak işlenir.
           </div>
-        )}
-
-        <footer className="footer">
-          <span>BY OCAL · MOMENZ</span>
-          <span>Etkinlik sayfasına yönlendirildikten sonra tarama devam eder.</span>
-        </footer>
-      </main>
-    </>
+        </aside>
+      </div>
+    </main>
   );
 }

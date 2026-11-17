@@ -97,6 +97,16 @@ export const auth = {
     }),
   logout: () =>
     api<{ message: string }>("/auth/logout", { method: "POST" }),
+  forgotPassword: (email: string) =>
+    api<{ message: string }>(
+      `/auth/password/forgot?email=${encodeURIComponent(email)}`,
+      { method: "POST" },
+    ),
+  resetPassword: (token: string, new_password: string) =>
+    api<{ message: string }>("/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
+    }),
 };
 
 // ------------------------------------------------------------------ folders
@@ -127,7 +137,6 @@ export const getJob = (id: string) => api<Job>(`/jobs/${id}`);
 // ------------------------------------------------------------------ events
 export type EventFilters = {
   upcoming?: boolean;
-  category?: string;
   q?: string;
   limit?: number;
   offset?: number;
@@ -136,8 +145,6 @@ export type EventFilters = {
 export function listEvents(filters: EventFilters = {}): Promise<EventList> {
   const params = new URLSearchParams();
   if (filters.upcoming) params.set("upcoming", "true");
-  if (filters.category && filters.category !== "tumu")
-    params.set("category", filters.category);
   if (filters.q) params.set("q", filters.q);
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.offset) params.set("offset", String(filters.offset));
@@ -153,7 +160,6 @@ export const getEventPhotos = (slug: string, limit = 24) =>
 export async function createEvent(payload: {
   title: string;
   description: string;
-  category: string;
   location: string;
   event_date?: string;
   url: string;

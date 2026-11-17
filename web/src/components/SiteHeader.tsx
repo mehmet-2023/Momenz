@@ -1,27 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { auth } from "@/lib/api";
-import type { User } from "@/lib/types";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { auth, ensureCsrf } from "@/lib/api";
 
 export default function SiteHeader() {
   const router = useRouter();
-  const [me, setMe] = useState<User | null>(null);
+  const pathname = usePathname();
+  const { me, loading, setMe } = useAuth();
 
   useEffect(() => {
-    let alive = true;
-    auth.me()
-      .then((user) => {
-        if (alive) setMe(user);
-      })
-      .catch(() => {
-        if (alive) setMe(null);
-      });
-    return () => {
-      alive = false;
-    };
+    void ensureCsrf();
   }, []);
 
   async function logout() {
@@ -34,22 +25,48 @@ export default function SiteHeader() {
     }
   }
 
+  function isActive(href: string) {
+    if (href === "/") return pathname === "/" || pathname.startsWith("/events");
+    return pathname === href;
+  }
+
   return (
-    <header className="site-header">
-      <div className="site-header-inner">
-        <Link href="/" className="brand">MOMENZ</Link>
-        <nav className="site-nav">
-          <Link href="/">Etkinlikler</Link>
-          {me ? (
+    <header className="masthead">
+      <div className="masthead-inner">
+        <Link href="/" className="wordmark" aria-label="Momenz ana sayfa">
+          MOMENZ<span className="wordmark-dot">.</span>
+        </Link>
+
+        <nav className="masthead-nav" aria-label="Ana menü">
+          <Link className={isActive("/") ? "active" : ""} href="/">
+            Etkinlikler
+          </Link>
+
+          {loading ? (
+            <span className="nav-skeleton" aria-hidden="true" />
+          ) : me ? (
             <>
-              <Link href="/events/new" className="nav-cta">+ Etkinlik ekle</Link>
-              <span className="kicker" style={{ color: "#fff" }}>{me.email}</span>
-              <button type="button" onClick={logout}>Çıkış</button>
+              <Link
+                className={isActive("/events/new") ? "active" : ""}
+                href="/events/new"
+              >
+                Etkinlik ekle
+              </Link>
+              <span className="nav-user" title={me.email}>
+                {me.name || me.email.split("@")[0]}
+              </span>
+              <button type="button" onClick={logout}>
+                Çıkış
+              </button>
             </>
           ) : (
             <>
-              <Link href="/login">Giriş yap</Link>
-              <Link href="/register" className="nav-cta">Kayıt ol</Link>
+              <Link className={isActive("/login") ? "active" : ""} href="/login">
+                Giriş yap
+              </Link>
+              <Link className="nav-cta" href="/register">
+                Kayıt ol
+              </Link>
             </>
           )}
         </nav>

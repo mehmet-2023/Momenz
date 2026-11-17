@@ -59,7 +59,6 @@ export type Event = {
   slug: string;
   title: string;
   description: string;
-  category: string;
   location: string;
   event_date: string | null;
   date_label: string | null;
