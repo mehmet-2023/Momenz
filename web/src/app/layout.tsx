@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Anton, Inter, Space_Mono } from "next/font/google";
+import { Chakra_Petch, Inter, Space_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
@@ -18,9 +18,9 @@ const mono = Space_Mono({
   display: "swap",
 });
 
-const display = Anton({
+const display = Chakra_Petch({
   subsets: ["latin", "latin-ext"],
-  weight: "400",
+  weight: ["500", "700"],
   variable: "--font-display",
   display: "swap",
 });
