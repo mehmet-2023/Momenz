@@ -135,7 +135,17 @@ cookie'ler first-party kalır ve CSRF akışı sorunsuz çalışır.
 
 ## Prod'a alma
 
+> **Önce migration, sonra deploy.** API açılışta `jobs`/`users` tablolarına bakar.
+> Şema eksikse artık çökmez (log'a uyarı yazar, `/health` `schema_ready: false`
+> döner) ama auth/klasör uçları çalışmaz. Bu yüzden migration'ı önce uygula.
+>
+> **D1 free tier günlük yazma kotası** doluysa migration reddedilir
+> (`exceeded D1's free tier daily row write limit`). Streamlit indexlemesi bu
+> kotayı tüketmiş olabilir. Çözüm: UTC 00:00'ı (Türkiye 03:00) bekle, ya da D1'i
+> paid plan'e geç. Kota sıfırlanınca `python scripts/migrate.py` tekrar çalıştır.
+
 1. **D1 migration:** prod D1 bilgileriyle `.env` doldur, `python scripts/migrate.py`.
+   Komut doğrudan çalışır (`scripts/` artık proje root'unu `sys.path`'e ekliyor).
 2. **Render API:** `New → Web Service` (veya Blueprint → `render.yaml`).
    Runtime **Docker**, plan **Free**, Health Check **`/health`**.
    `render.yaml` JWT secret'ı `generateValue: true` ile üretir,

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import getpass
 import os
-import secrets
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.config import get_settings
 from api.db import D1Client

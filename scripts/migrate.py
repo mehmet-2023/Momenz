@@ -7,7 +7,12 @@ Ortam değişkenleri: MOMENZ_D1_ACCOUNT_ID / DATABASE_ID / API_TOKEN
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+# `python scripts/migrate.py` ile doğrudan çalıştırıldığında proje root'u
+# sys.path'te olmaz; api/ paketini bulabilmek için ekle.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.config import get_settings
 from api.db import D1Client

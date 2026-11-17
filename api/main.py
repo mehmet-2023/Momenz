@@ -54,10 +54,20 @@ async def lifespan(app: FastAPI):
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
 
-    recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
-    if recovered:
-        log.warning("Yarım kalmış %d iş kuyruğa alındı.", recovered)
-    user_repo.purge_expired(db)
+    # Bakım sorguları şemaya bağlıdır. Migration henüz uygulanmadıysa veya D1
+    # yazma kotası doluysa API yine de açılsın; health check yeşil kalsın ve
+    # sorun loglarda net görünsün. (Aksi halde Render deploy'u patlıyordu.)
+    try:
+        recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
+        if recovered:
+            log.warning("Yarım kalmış %d iş kuyruğa alındı.", recovered)
+        user_repo.purge_expired(db)
+    except D1Error as exc:
+        log.error(
+            "D1 bakım sorguları atlandı: %s | Şema eksikse `python scripts/migrate.py` "
+            "çalıştır, yazma kotası doluysa UTC 00:00'ı bekle.",
+            exc,
+        )
 
     # Model dosyaları yoksa indirilir; sadece bir kez, başlangıçta.
     try:
@@ -134,11 +144,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ok = db.ping()
         except Exception:
             ok = False
+        try:
+            row = db.query_one(
+                "SELECT count(*) AS n FROM sqlite_master "
+                "WHERE type='table' AND name IN "
+                "('users','jobs','refresh_tokens','folder_index_versions')"
+            )
+            schema_ready = int((row or {}).get("n") or 0) == 4
+        except Exception:
+            schema_ready = False
         return HealthOut(
             status="ok" if ok else "degraded",
             d1=ok,
             environment=settings.environment,
             time=datetime.now(timezone.utc),
+            schema_ready=schema_ready,
         )
 
     prefix = "/api/v1"

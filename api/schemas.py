@@ -129,3 +129,4 @@ class HealthOut(BaseModel):
     d1: bool
     environment: str
     time: datetime
+    schema_ready: bool = True
