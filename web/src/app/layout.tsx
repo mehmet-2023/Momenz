@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Space_Mono } from "next/font/google";
+import { Anton, Inter, Space_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
@@ -18,6 +18,13 @@ const mono = Space_Mono({
   display: "swap",
 });
 
+const display = Anton({
+  subsets: ["latin", "latin-ext"],
+  weight: "400",
+  variable: "--font-display",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Momenz — Etkinliklerde yüz tanıma, fotoğrafını bul",
   description:
@@ -28,7 +35,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="tr" className={`${inter.variable} ${mono.variable}`}>
+    <html lang="tr" className={`${inter.variable} ${mono.variable} ${display.variable}`}>
       <body>
         <AuthProvider>
           <SiteHeader />
