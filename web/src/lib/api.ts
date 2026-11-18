@@ -33,6 +33,7 @@ function cookie(name: string): string | null {
 }
 
 let csrfPromise: Promise<void> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 /** CSRF cookie'sini oturum başına yalnızca bir kez alır (Vercel hit tasarrufu). */
 export function ensureCsrf(): Promise<void> {
@@ -46,9 +47,37 @@ export function ensureCsrf(): Promise<void> {
   return csrfPromise;
 }
 
+/**
+ * Access token beklenmedik şekilde reddedilirse refresh cookie ile sessizce
+ * yeniler. Paralel istekler tek refresh isteği paylaşır.
+ */
+function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const token = cookie(CSRF_COOKIE);
+      const headers = new Headers();
+      if (token) headers.set("X-CSRF-Token", token);
+      try {
+        const res = await fetch(`${BASE}/auth/refresh`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 export async function apiResponse(
   path: string,
   options: RequestInit = {},
+  allowRetry = true,
 ): Promise<Response> {
   const method = (options.method || "GET").toUpperCase();
   const headers = new Headers(options.headers);
@@ -65,11 +94,24 @@ export async function apiResponse(
     headers.set("Content-Type", "application/json");
   }
 
-  return fetch(`${BASE}${path}`, {
+  const response = await fetch(`${BASE}${path}`, {
     ...options,
     headers,
     credentials: "include",
   });
+
+  if (
+    response.status === 401 &&
+    allowRetry &&
+    !["/auth/refresh", "/auth/login", "/auth/register"].includes(path) &&
+    (await refreshSession())
+  ) {
+    // Refresh CSRF cookie'sini döndürür; yeni token'ı headera koyup tekrarla.
+    const refreshed = cookie(CSRF_COOKIE);
+    if (refreshed) headers.set("X-CSRF-Token", refreshed);
+    return apiResponse(path, options, false);
+  }
+  return response;
 }
 
 async function parse<T>(response: Response): Promise<T> {

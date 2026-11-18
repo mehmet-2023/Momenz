@@ -61,6 +61,7 @@ def login(
         result.refresh_token,
         new_csrf_token(),
         settings.refresh_token_ttl_days * 86_400,
+        settings.access_token_ttl_minutes * 60,
     )
     return result
 
@@ -88,6 +89,7 @@ def refresh(
         result.refresh_token,
         new_csrf_token(),
         settings.refresh_token_ttl_days * 86_400,
+        settings.access_token_ttl_minutes * 60,
     )
     return result
 

@@ -22,11 +22,12 @@ def set_auth_cookies(
     refresh_token: str,
     csrf_token: str,
     refresh_max_age: int,
+    access_max_age: int,
 ) -> None:
     response.set_cookie(
         settings.cookie_name,
         access_token,
-        max_age=15 * 60,
+        max_age=access_max_age,
         **_common(settings),
     )
     response.set_cookie(

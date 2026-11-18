@@ -45,8 +45,10 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- auth
     jwt_secret: str = "dev-only-change-this-secret"
     jwt_algorithm: str = "HS256"
-    access_token_ttl_minutes: int = 15
-    refresh_token_ttl_days: int = 30
+    # Oturum süresiz: kullanıcı çıkış yapmadıkça / şifresi değişmedikçe
+    # tekrar giriş yapmaz. (10 yıl, pratikte tarayıcı oturumu kadar kalıcı.)
+    access_token_ttl_minutes: int = 60 * 24 * 365 * 10
+    refresh_token_ttl_days: int = 365 * 10
     verification_ttl_hours: int = 24
     cookie_name: str = "momenz_access"
     refresh_cookie_name: str = "momenz_refresh"
