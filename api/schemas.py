@@ -164,6 +164,16 @@ class SearchOut(BaseModel):
     count: int
     results: list[SearchResultOut]
     took_ms: float
+    # Tarayıcı bu vektörü IndexedDB'ye yazar; sonraki benzer yüzlerde sunucuya
+    # / D1'e hiç dokunmadan önbellek karşılaştırması yapılır.
+    query_embedding: list[float] = Field(default_factory=list)
+
+
+class EmbedOut(BaseModel):
+    """Yalnızca yüz vektörü. D1 okuma/yazma içermez (source of truth korunur)."""
+
+    embedding: list[float] = Field(default_factory=list)
+    ok: bool = False
 
 
 class PreviewZipIn(BaseModel):

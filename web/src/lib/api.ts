@@ -232,14 +232,31 @@ export const leaveEvent = (slug: string) =>
   });
 
 // ------------------------------------------------------------------ search
+/**
+ * Yüz vektörünü D1'e dokunmadan alır. Tarayıcı bu vektörü benzerlik kontrolü
+ * için kullanır; eşleşme varsa /search hiç çağrılmaz.
+ */
+export async function embedFace(file: File): Promise<number[]> {
+  const form = new FormData();
+  form.append("file", file);
+  const data = await api<{ embedding: number[]; ok: boolean }>("/search/embed", {
+    method: "POST",
+    body: form,
+  });
+  return data.ok ? data.embedding : [];
+}
+
 export async function searchFace(
   folderKey: string,
-  file: File,
+  file: File | null,
   threshold?: number,
+  embedding?: number[],
 ): Promise<SearchResponse> {
   const form = new FormData();
   form.append("folder_key", folderKey);
-  form.append("file", file);
+  // Vektör zaten hesaplandıysa görseli tekrar yüklemeye/analiz etmeye gerek yok.
+  if (embedding?.length) form.append("embedding", JSON.stringify(embedding));
+  else if (file) form.append("file", file);
   if (threshold !== undefined) form.append("threshold", String(threshold));
   return api<SearchResponse>("/search", { method: "POST", body: form });
 }

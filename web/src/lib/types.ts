@@ -53,6 +53,7 @@ export type SearchResponse = {
   count: number;
   results: SearchResult[];
   took_ms: number;
+  query_embedding?: number[];
 };
 
 export type Event = {

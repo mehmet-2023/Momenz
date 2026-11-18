@@ -88,6 +88,26 @@ def fetch_matrix(db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]
     return matrix, metas
 
 
+def public_and_version(db: D1Client, folder_key: str) -> tuple[bool, int]:
+    """Tek D1 isteğinde yayın durumu + index versiyonu.
+
+    Arama yolunda ayrı ayrı ``is_public_folder`` ve ``get_version``
+    çağrıları iki HTTP isteği ve iki ayrı satır okumasıydı. Scalar subquery
+    ikisini tek yanıtta birleştirir.
+    """
+    row = db.query_one(
+        """
+        SELECT
+            EXISTS(SELECT 1 FROM events
+                   WHERE folder_key = ? AND is_public = 1) AS is_public,
+            (SELECT version FROM folder_index_versions
+             WHERE folder_key = ? LIMIT 1) AS version
+        """,
+        (folder_key, folder_key),
+    ) or {}
+    return bool(row.get("is_public")), int(row.get("version") or 0)
+
+
 def stats(db: D1Client, folder_key: str) -> dict[str, int]:
     row = db.query_one(
         """

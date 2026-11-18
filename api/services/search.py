@@ -61,15 +61,22 @@ class SearchService:
             self._entries.pop(folder_key, None)
             self._locks.pop(folder_key, None)
 
-    def _get_matrix(self, db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]:
-        version = folder_repo.get_version(db, folder_key)
+    def _get_matrix(
+        self,
+        db: D1Client,
+        folder_key: str,
+        version: int | None = None,
+    ) -> tuple[np.ndarray, list[dict]]:
+        # `version` arama rotasındaki tek D1 sorgusundan gelir; burada tekrar
+        # okunmaz. Böylece arama başına D1 okuması en fazla 1 satırdır.
+        if version is None:
+            version = folder_repo.get_version(db, folder_key)
         entry = self._entries.get(folder_key)
         if entry is not None and entry.version == version:
             entry.last_used = time.monotonic()
             return entry.matrix, entry.metas
 
         with self._lock_for(folder_key):
-            version = folder_repo.get_version(db, folder_key)
             entry = self._entries.get(folder_key)
             if entry is not None and entry.version == version:
                 entry.last_used = time.monotonic()
@@ -97,9 +104,10 @@ class SearchService:
         *,
         threshold: float | None = None,
         max_results: int | None = None,
+        version: int | None = None,
     ) -> tuple[list[dict], float]:
         started = time.perf_counter()
-        matrix, metas = self._get_matrix(db, folder_key)
+        matrix, metas = self._get_matrix(db, folder_key, version=version)
         if matrix.size == 0:
             return [], 0.0
         results = search_embeddings(

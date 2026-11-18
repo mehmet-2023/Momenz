@@ -25,6 +25,7 @@ class IndexOptions:
     max_images: int = 0
     force: bool = False
     workers: int = 4
+    chunk_size: int = 32
     sync_batch: int = 100
 
 
@@ -123,9 +124,28 @@ def build_index(
     cached_skipped = 0
     batch: list[dict] = []
     sync_errors: list[str] = []
-    workers = 4
-    chunk_size = 16
+    # İndirme + yüz analizi aynı thread'de: indirme beklerken analiz boşta
+    # kalmasın. worker sayısı makine çekirdeğine göre ayarlanır.
+    workers = max(1, int(options.workers or 4))
+    chunk_size = max(4, int(options.chunk_size or 32))
     executor = ThreadPoolExecutor(max_workers=workers)
+
+    def _process(item: DriveItem) -> tuple[int, int, list[dict]]:
+        image = client.fetch_image(item.id, options.thumb_size, resource_key)
+        if image is None:
+            raise RuntimeError("Görsel indirilemedi veya çözülemedi.")
+        try:
+            height, width = image.shape[:2]
+            faces, _ = engine.analyze(
+                image,
+                det_threshold=options.det_threshold,
+                min_face=options.min_face,
+                max_faces=options.max_faces,
+                input_max_side=options.thumb_size,
+            )
+            return height, width, faces
+        finally:
+            del image
 
     def flush_batch(force: bool = False) -> None:
         nonlocal batch
@@ -178,109 +198,38 @@ def build_index(
             if not chunk:
                 continue
 
-            future_map = {
-                executor.submit(
-                    client.fetch_image,
-                    item.id,
-                    options.thumb_size,
-                    resource_key,
-                ): item
-                for item in chunk
-            }
+            future_map = {executor.submit(_process, item): item for item in chunk}
 
             for future in as_completed(future_map):
                 item = future_map.pop(future)
-                image = None
-                error_text: str | None = None
-
                 try:
-                    image = future.result()
+                    height, width, faces = future.result()
                 except Exception as exc:
                     error_text = str(exc)[:300]
-                finally:
-                    del future
-
-                if image is None:
-                    error_text = (
-                        error_text or "Görsel indirilemedi veya çözülemedi."
-                    )
                     try:
-                        store.save_error(
-                            item.id, item.name, item.path, error_text
-                        )
-                    except Exception as exc:
-                        sync_errors.append(str(exc)[:300])
+                        store.save_error(item.id, item.name, item.path, error_text)
+                    except Exception as db_exc:
+                        sync_errors.append(str(db_exc)[:300])
                     counters["error"] += 1
                     row = encode_row(
-                        item.id,
-                        item.name,
-                        item.path,
-                        0,
-                        0,
-                        "error",
-                        error_text,
-                        [],
+                        item.id, item.name, item.path, 0, 0, "error", error_text, []
                     )
                 else:
-                    height, width = image.shape[:2]
+                    status = "done" if faces else "no_face"
                     try:
-                        faces, _ = engine.analyze(
-                            image,
-                            det_threshold=options.det_threshold,
-                            min_face=options.min_face,
-                            max_faces=options.max_faces,
-                            input_max_side=options.thumb_size,
+                        store.save_result(
+                            item.id, item.name, item.path, width, height, faces, status
                         )
-                    except Exception as exc:
-                        error_text = f"Yüz analizi hatası: {exc}"[:300]
-                        try:
-                            store.save_error(
-                                item.id, item.name, item.path, error_text
-                            )
-                        except Exception as db_exc:
-                            sync_errors.append(str(db_exc)[:300])
-                        counters["error"] += 1
-                        row = encode_row(
-                            item.id,
-                            item.name,
-                            item.path,
-                            width,
-                            height,
-                            "error",
-                            error_text,
-                            [],
-                        )
+                    except Exception as db_exc:
+                        sync_errors.append(str(db_exc)[:300])
+                    if faces:
+                        counters["done"] += 1
+                        counters["faces"] += len(faces)
                     else:
-                        status = "done" if faces else "no_face"
-                        try:
-                            store.save_result(
-                                item.id,
-                                item.name,
-                                item.path,
-                                width,
-                                height,
-                                faces,
-                                status,
-                            )
-                        except Exception as db_exc:
-                            sync_errors.append(str(db_exc)[:300])
-                        if faces:
-                            counters["done"] += 1
-                            counters["faces"] += len(faces)
-                        else:
-                            counters["no_face"] += 1
-                        row = encode_row(
-                            item.id,
-                            item.name,
-                            item.path,
-                            width,
-                            height,
-                            status,
-                            None,
-                            faces,
-                        )
-                    finally:
-                        del image
+                        counters["no_face"] += 1
+                    row = encode_row(
+                        item.id, item.name, item.path, width, height, status, None, faces
+                    )
 
                 batch.append(row)
                 processed += 1

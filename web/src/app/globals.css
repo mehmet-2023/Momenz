@@ -86,56 +86,53 @@ img { max-width: 100%; }
   min-height: 88vh;
   display: flex; align-items: center;
 }
-/* Saf CSS 3D sahne: iki perspektifli ızgara + tell kafes küp.
-   Fare açısı --mx / --my değişkenleriyle verilir; JS döngüsü yok. */
+/* Hero arka planı: yalnızca çizgiler. Açılışta çizilir, fareyle hafif kayar. */
 .hero-scene {
-  position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-  perspective: 900px;
-  perspective-origin: calc(50% + var(--mx, 0) * 16%) calc(45% + var(--my, 0) * 12%);
+  position: absolute; inset: -24px; z-index: 0; pointer-events: none; overflow: hidden;
+  transform: translate3d(
+    calc(var(--mx, 0) * -10px),
+    calc(var(--my, 0) * -8px),
+    0
+  );
+  transition: transform .5s var(--ease);
 }
-.scene-plane {
-  position: absolute; left: -50%; right: -50%; top: -25%; height: 160%;
-  background-image:
-    linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px);
-  background-size: 52px 52px;
-  mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
-  transform-style: preserve-3d;
+.scene-line {
+  position: absolute; background: rgba(255,255,255,.15);
+  transform-origin: left center;
+  animation: lineDrawH 1s var(--ease) both;
 }
-.scene-plane-a {
-  transform: rotateX(74deg) translateZ(-170px) translateY(calc(var(--my, 0) * 16px));
-  opacity: .55;
-  animation: sceneDriftA 22s linear infinite;
+.scene-line-a { top: 20%; left: 0; right: 0; height: 1px; }
+.scene-line-b { top: 80%; left: 0; right: 0; height: 1px; animation-delay: .12s; }
+.scene-line-c {
+  left: 38%; top: 0; bottom: 0; width: 1px; transform-origin: center top;
+  animation-name: lineDrawV; animation-delay: .24s;
 }
-.scene-plane-b {
-  transform: rotateX(74deg) translateZ(150px) scale(.78) translateX(calc(var(--mx, 0) * -14px));
-  opacity: .2;
-  animation: sceneDriftB 30s linear infinite;
+.scene-line-d {
+  left: 0; right: 0; top: 50%; height: 1px; transform-origin: left center;
+  animation-delay: .36s;
 }
-.scene-cube-wrap {
-  position: absolute; top: 48%; left: 50%; width: 190px; height: 190px;
-  margin: -95px 0 0 -95px; transform-style: preserve-3d;
-  transform: rotateX(calc(var(--my, 0) * -14deg)) rotateY(calc(var(--mx, 0) * 18deg));
-  transition: transform .35s var(--ease);
+.scene-line-e {
+  left: 74%; top: 0; bottom: 0; width: 1px; transform-origin: center top;
+  animation-name: lineDrawV; animation-delay: .48s;
 }
-.scene-cube {
-  position: absolute; inset: 0; transform-style: preserve-3d;
-  animation: sceneCube 28s linear infinite;
-}
-.cube-face {
-  position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.32);
-  background: transparent;
-}
-.cube-front  { transform: translateZ(95px); }
-.cube-back   { transform: rotateY(180deg) translateZ(95px); }
-.cube-right  { transform: rotateY(90deg) translateZ(95px); }
-.cube-left   { transform: rotateY(-90deg) translateZ(95px); }
-.cube-top    { transform: rotateX(90deg) translateZ(95px); }
-.cube-bottom { transform: rotateX(-90deg) translateZ(95px); }
 .scene-scanline {
   position: absolute; left: 0; right: 0; height: 1px;
-  background: rgba(255,255,255,.15);
-  animation: sceneScan 7s linear infinite;
+  background: rgba(255,255,255,.12);
+  animation: sceneScan 6s linear infinite .8s;
+}
+/* Hero init: çizgiler -> başlık satırları -> açıklama -> butonlar. */
+.hero-init .hero-line {
+  opacity: 0; clip-path: inset(0 100% 0 0);
+  animation: heroLineIn .7s var(--ease) forwards;
+}
+.hero-init .hero-line:nth-child(2) { animation-delay: .18s; }
+.hero-init .hero-lead {
+  opacity: 0; transform: translateY(12px);
+  animation: revealUp .65s var(--ease) .38s forwards;
+}
+.hero-init .hero-actions {
+  opacity: 0; transform: translateY(12px);
+  animation: revealUp .65s var(--ease) .5s forwards;
 }
 .hero-inner {
   position: relative; z-index: 2; max-width: 1120px; width: 100%; margin: 0 auto;
@@ -181,6 +178,18 @@ img { max-width: 100%; }
 
 /* --------------------------------------------------------------- reveals */
 .reveal { opacity: 0; transform: translateY(20px); animation: revealUp .8s var(--ease) forwards; }
+
+/* İçerik elementlerinin girişte sırayla ayrı ayrı belirmesi. Loader değişmez;
+   sayfa yüklenince gerçek elementler kendi zamanlamasıyla gelir. */
+.init-seq > * { animation: initIn .5s var(--ease) both; }
+.init-seq > *:nth-child(1) { animation-delay: .05s; }
+.init-seq > *:nth-child(2) { animation-delay: .12s; }
+.init-seq > *:nth-child(3) { animation-delay: .19s; }
+.init-seq > *:nth-child(4) { animation-delay: .26s; }
+.init-seq > *:nth-child(5) { animation-delay: .33s; }
+.init-seq > *:nth-child(6) { animation-delay: .40s; }
+.init-seq > *:nth-child(7) { animation-delay: .47s; }
+.init-seq > *:nth-child(8) { animation-delay: .54s; }
 
 /* -------------------------------------------------------------- sections */
 .events-section { padding-top: 72px; }
@@ -335,19 +344,14 @@ img { max-width: 100%; }
 .skeleton-line.medium { width: 62%; }
 .skeleton-hero { height: 320px; border: 1px solid var(--line); margin-bottom: 20px; }
 
-/* ------------------------------- initial loading (hero ile aynı sahne) */
-.load-screen {
-  position: relative; overflow: hidden; border: 1px solid #303030;
-  background: var(--ink); color: var(--paper);
-}
-.load-content { position: relative; z-index: 2; }
+/* --------------------------------------------------- initial loading */
+.load-screen { border: 1px solid var(--line); background: var(--paper); }
 .load-top {
   display: flex; align-items: center; gap: 14px; padding: 18px 20px;
-  border-bottom: 1px solid #303030;
+  border-bottom: 1px solid var(--line);
 }
 .load-mark { font-size: 1.1rem; animation: pulse 1s ease-in-out infinite; }
 .load-heading { flex: 1; }
-.load-screen .eyebrow { color: #9a9a9a; }
 .load-title {
   font-family: var(--font-mono), monospace; font-weight: 700;
   font-size: 1.05rem; letter-spacing: -.03em; margin-top: 4px;
@@ -356,25 +360,21 @@ img { max-width: 100%; }
   font-family: var(--font-mono), monospace; font-size: .9rem;
   letter-spacing: .2em; animation: pulse 1.4s ease-in-out infinite;
 }
-.load-bar { height: 3px; background: #2a2a2a; overflow: hidden; }
+.load-bar { height: 3px; background: var(--soft); overflow: hidden; }
 .load-bar span {
-  display: block; width: 38%; height: 100%; background: #fff;
+  display: block; width: 38%; height: 100%; background: var(--ink);
   animation: loadScan 1.6s ease-in-out infinite;
 }
 .load-grid {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 20px;
 }
-.load-cell {
-  aspect-ratio: 4 / 3; border: 1px solid #303030;
-  background: linear-gradient(90deg, #1c1c1c 25%, #2b2b2b 50%, #1c1c1c 75%);
-  background-size: 200% 100%; animation: shimmer 1.3s linear infinite;
-}
+.load-cell { aspect-ratio: 4 / 3; border: 1px solid var(--line); }
 .load-screen-form .load-grid { grid-template-columns: repeat(2, 1fr); }
 .load-foot {
   display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  padding: 12px 20px; border-top: 1px solid #303030;
+  padding: 12px 20px; border-top: 1px solid var(--line);
   font-family: var(--font-mono), monospace; font-size: .52rem;
-  letter-spacing: .1em; color: #8a8a8a;
+  letter-spacing: .1em; color: var(--muted);
 }
 @keyframes loadScan {
   0% { transform: translateX(-100%); }
@@ -926,12 +926,10 @@ textarea.input { min-height: 120px; resize: vertical; }
 }
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes pulse { 50% { opacity: .45; } }
-@keyframes sceneDriftA { from { background-position: 0 0; } to { background-position: 0 52px; } }
-@keyframes sceneDriftB { from { background-position: 0 0; } to { background-position: 52px 0; } }
-@keyframes sceneCube {
-  from { transform: rotateY(60deg) rotateX(-8deg); }
-  to   { transform: rotateY(420deg) rotateX(-8deg); }
-}
+@keyframes lineDrawH { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes lineDrawV { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes heroLineIn { to { opacity: 1; clip-path: inset(0 0 0 0); } }
+@keyframes initIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes sceneScan {
   0% { top: 8%; opacity: 0; }
   15%, 85% { opacity: 1; }
@@ -965,8 +963,10 @@ textarea.input { min-height: 120px; resize: vertical; }
   }
   .reveal { opacity: 1; transform: none; }
   .hero-inner, .hero-title, .hero-line,
-  .hero-title em { opacity: 1 !important; transform: none !important; }
-  .scene-plane, .scene-cube, .scene-scanline { animation: none !important; }
+  .hero-title em { opacity: 1 !important; transform: none !important; clip-path: none !important; }
+  .hero-lead, .hero-actions { opacity: 1 !important; transform: none !important; }
+  .scene-line, .scene-scanline { animation: none !important; transform: none !important; opacity: 1 !important; }
+  .init-seq > * { animation: none !important; opacity: 1 !important; transform: none !important; }
   .auth-aside h2, .auth-aside p,
   .auth-card form .field, .auth-card form .submit-wide { clip-path: none; }
 }
@@ -990,7 +990,7 @@ textarea.input { min-height: 120px; resize: vertical; }
 @media (max-width: 700px) {
   .hero { padding: 72px 18px 64px; min-height: 86svh; }
   .hero-lead { font-size: .78rem; line-height: 1.55; margin-bottom: 26px; }
-  .scene-cube-wrap { transform: scale(.7) rotateX(calc(var(--my, 0) * -14deg)) rotateY(calc(var(--mx, 0) * 18deg)); }
+  .scene-line-c { left: 22%; }
   .hero-actions { margin-bottom: 40px; }
   .hero-actions .btn { width: 100%; }
   .masthead-inner { padding: 14px 16px; }

@@ -88,7 +88,13 @@ class Settings(BaseSettings):
     job_max_progress_writes: int = 200
 
     # ---------------------------------------------------------------- mail
-    resend_api_key: str = ""
+    # Gmail SMTP (Resend kaldırıldı). Gmail App Password gerekir; normal hesap
+    # şifresi SMTP ile çalışmaz. 2FA açık olmalı.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_timeout: int = 20
     mail_from: str = "Momenz <no-reply@momenz.com>"
     mail_reset_url: str = (
         "https://momenz.vercel.app/sifre-sifirla?token={token}"

@@ -89,7 +89,7 @@ export default function Home() {
     <main>
       {/* ------------------------------------------------------------- HERO */}
       <section
-        className="hero"
+        className="hero hero-init"
         ref={heroRef}
         onMouseMove={onHeroMove}
         onMouseLeave={onHeroLeave}
@@ -98,19 +98,15 @@ export default function Home() {
 
         <div className="hero-inner">
           <h1 className="hero-title">
-            <span className="hero-line reveal" style={{ animationDelay: "80ms" }}>
-              Binlerce fotoğrafın
-            </span>
-            <span className="hero-line reveal" style={{ animationDelay: "180ms" }}>
-              içinde <em>kendini bul.</em>
-            </span>
+            <span className="hero-line">Binlerce fotoğrafın</span>
+            <span className="hero-line">içinde <em>kendini bul.</em></span>
           </h1>
 
-          <p className="hero-lead reveal" style={{ animationDelay: "300ms" }}>
+          <p className="hero-lead">
             Etkinliğini seç, yüzünü yükle. Sana ait kareler sırayla gelsin.
           </p>
 
-          <div className="hero-actions reveal" style={{ animationDelay: "400ms" }}>
+          <div className="hero-actions">
             <Link className="btn btn-light" href={selfFindHref}>
               <span aria-hidden="true">⌖</span> Kendini Bul
             </Link>

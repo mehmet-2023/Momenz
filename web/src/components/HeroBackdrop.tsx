@@ -1,24 +1,17 @@
 /**
- * Saf CSS 3D arka plan: iki perspektifli ızgara düzlemi, tell kafes küp ve
- * yatay tarama çizgisi. Fare değişkenleri (--mx / --my) sahnenin açısını
- * hafifçe çevirir; JS animasyon döngüsü yok, GPU bileşimleriyle çalışır.
+ * Hero arka planı: yalnızca ince çizgiler. Küp, zemin/ızgara veya 3D kutu
+ * yok. Çizgiler açılışta soldan/sağdan çizilerek gelir, ince bir tarama
+ * çizgisi yavaşça aşağı kayar. JS animasyon döngüsü yok.
  */
 export default function HeroBackdrop() {
   return (
     <div className="hero-scene" aria-hidden="true">
-      <div className="scene-plane scene-plane-a" />
-      <div className="scene-plane scene-plane-b" />
-      <div className="scene-cube-wrap">
-        <div className="scene-cube">
-          <span className="cube-face cube-front" />
-          <span className="cube-face cube-back" />
-          <span className="cube-face cube-right" />
-          <span className="cube-face cube-left" />
-          <span className="cube-face cube-top" />
-          <span className="cube-face cube-bottom" />
-        </div>
-      </div>
-      <div className="scene-scanline" />
+      <span className="scene-line scene-line-a" />
+      <span className="scene-line scene-line-b" />
+      <span className="scene-line scene-line-c" />
+      <span className="scene-line scene-line-d" />
+      <span className="scene-line scene-line-e" />
+      <span className="scene-scanline" />
     </div>
   );
 }

@@ -152,7 +152,7 @@ export default function NewEventPage() {
 
   return (
     <main className="container page-pad new-event-page">
-      <nav className="breadcrumb" aria-label="Gezinme">
+      <nav className="breadcrumb init-seq" aria-label="Gezinme">
         <Link href="/">ETKİNLİKLER</Link>
         <span>/</span>
         <span>YENİ ETKİNLİK</span>
@@ -160,7 +160,7 @@ export default function NewEventPage() {
 
       {!job ? (
         <>
-          <div className="section-head">
+          <div className="section-head init-seq">
             <div>
               <div className="eyebrow">02 / YENİ ETKİNLİK</div>
               <h1 className="section-title">Etkinliği bağla.</h1>
@@ -171,7 +171,7 @@ export default function NewEventPage() {
             </p>
           </div>
 
-          <div className="link-panel">
+          <div className="link-panel init-seq">
             <div className="link-panel-head">
               <span className="step-no">01</span>
               <div>
@@ -203,7 +203,7 @@ export default function NewEventPage() {
               </div>
             </form>
 
-            <div className="auto-grid">
+            <div className="auto-grid init-seq">
               <div><b>BAŞLIK</b><span>Drive klasör adı</span></div>
               <div><b>FOTOĞRAF</b><span>Klasörden sayılır</span></div>
               <div><b>YÜKLEME TARİHİ</b><span>Drive metadata</span></div>
@@ -217,7 +217,7 @@ export default function NewEventPage() {
           </div>
         </>
       ) : (
-        <div className="index-console">
+        <div className="index-console init-seq">
           <div className="console-head">
             <div className="console-status">
               <span className={`console-dot${done ? " is-done" : failed ? " is-fail" : ""}`} />

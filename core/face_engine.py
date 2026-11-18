@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import itertools
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import cv2
 import numpy as np
@@ -227,3 +228,38 @@ class FaceEngine:
             reverse=True,
         )
         return faces[: max(1, int(max_faces))], (original_w, original_h)
+
+
+class FaceEnginePool:
+    """Çekirdek sayısı kadar bağımsız motor; her thread kendi motorunu kullanır.
+
+    Tek ``FaceEngine`` içindeki RLock yüz analizini serileştirir; bu yüzden
+    indirme paralel olsa bile analiz tek çekirdekte kalıyordu. Havuz, her
+    worker thread'e ayrı detector/recognizer verir ve gerçek paralellik
+    sağlar. Modeller bir kez indirilir, N kez yüklenir.
+    """
+
+    def __init__(
+        self,
+        yunet_path: Path,
+        sface_path: Path,
+        *,
+        size: int = 4,
+        num_threads: int = 1,
+        **kwargs: Any,
+    ) -> None:
+        count = max(1, int(size))
+        self._engines = [
+            FaceEngine(yunet_path, sface_path, num_threads=num_threads, **kwargs)
+            for _ in range(count)
+        ]
+        self._counter = itertools.count()
+        self._local = threading.local()
+        self.size = count
+
+    def analyze(self, image_bgr: np.ndarray, **kwargs: Any) -> tuple[list[dict], tuple[int, int]]:
+        index = getattr(self._local, "engine_index", None)
+        if index is None:
+            index = next(self._counter) % len(self._engines)
+            self._local.engine_index = index
+        return self._engines[index].analyze(image_bgr, **kwargs)

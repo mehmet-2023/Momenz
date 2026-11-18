@@ -94,7 +94,7 @@ export default function EventDetailPage() {
 
   return (
     <main className="container detail-page">
-      <nav className="breadcrumb" aria-label="Gezinme">
+      <nav className="breadcrumb init-seq" aria-label="Gezinme">
         <Link href="/">ETKİNLİKLER</Link>
         <span>/</span>
         <span>{event?.title || "YÜKLENİYOR"}</span>
@@ -114,7 +114,7 @@ export default function EventDetailPage() {
       ) : (
         <div className="detail-layout">
           <div className="detail-main">
-            <div className="detail-hero-strip">
+            <div className="detail-hero-strip init-seq">
               <div className="eyebrow">{event.date_label || "TARİH YAKINDA"}</div>
               <h1>{event.title}</h1>
               <div className="detail-strip-meta">
@@ -126,7 +126,7 @@ export default function EventDetailPage() {
 
             <FaceSearch folderKey={event.folder_key} />
 
-            <section className="gallery-section">
+            <section className="gallery-section init-seq">
               <div className="section-head compact">
                 <div>
                   <div className="eyebrow">02 / FOTOĞRAFLAR</div>
@@ -137,7 +137,7 @@ export default function EventDetailPage() {
               {photos.length === 0 ? (
                 <div className="no-image">Henüz fotoğraf yüklenmedi. Tarama tamamlandığında burada görünecek.</div>
               ) : (
-                <div className="photo-grid">
+                <div className="photo-grid init-seq">
                   {photos.map((photo) => (
                     <button
                       key={photo.file_id}
@@ -155,7 +155,7 @@ export default function EventDetailPage() {
             </section>
           </div>
 
-          <aside className="detail-aside">
+          <aside className="detail-aside init-seq">
             <div className="aside-card">
               <div className="aside-label">KATILIM</div>
               {event.is_owner ? (

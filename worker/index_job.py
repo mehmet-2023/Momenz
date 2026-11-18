@@ -28,7 +28,7 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         DEFAULT_THUMB_SIZE,
     )
     from core.d1_store import D1Store
-    from core.face_engine import FaceEngine, ensure_models
+    from core.face_engine import FaceEnginePool, ensure_models
     from core.pg_index_store import PgIndexStore
     from core.pipeline import IndexOptions, build_index
 
@@ -42,8 +42,11 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
     folder_key = str(claimed["folder_key"])
     payload = claimed.get("payload") or {}
     try:
+        # Makinenin tüm çekirdeklerini kullan: her worker'ın kendi yüz motoru
+        # olsun (tek FaceEngine RLock ile analizi serileştiriyordu).
+        cpu = max(1, min(8, os.cpu_count() or 4))
         yunet, sface = ensure_models()
-        engine = FaceEngine(yunet, sface, num_threads=2)
+        engine = FaceEnginePool(yunet, sface, size=cpu, num_threads=1)
         store = PgIndexStore(D1Store(settings.d1_config), folder_key)
         client = get_drive_client(settings)
 
@@ -75,7 +78,8 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
                 min_face=DEFAULT_MIN_FACE,
                 max_faces=DEFAULT_MAX_FACES,
                 force=claimed.get("kind") == "reindex",
-                workers=4,
+                workers=cpu,
+                chunk_size=64,
                 sync_batch=100,
             ),
             on_progress=on_progress,
@@ -124,10 +128,9 @@ def poll_once(settings: Any) -> bool:
         )
         if not candidate:
             return False
-        job = job_repo.get(db, str(candidate["id"]))
-        if not job:
-            return False
-        run_job(settings, job)
+        # run_job -> claim_by_id zaten tüm satırı RETURNING ile okur; ayrıca
+        # job_repo.get çağrısı gereksiz bir D1 okumasıydı.
+        run_job(settings, {"id": str(candidate["id"])})
         return True
     finally:
         db.close()
@@ -178,33 +181,26 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
     # Modal CLI `modal deploy worker/index_job.py` için standart isim.
     app = modal_app
 
-    @modal_app.function(timeout=3600, cpu=2, memory=2048)
+    @modal_app.function(timeout=3600, cpu=8, memory=4096)
     def modal_index_job(job_id: str) -> dict[str, Any]:
         from api.config import get_settings
-        from api.db import D1Client
-        from api.repositories import jobs as job_repo
 
         settings = get_settings()
-        db = D1Client(**settings.d1_config)
-        try:
-            job = job_repo.get(db, job_id)
-        finally:
-            db.close()
-        if not job:
-            return {"status": "not_found"}
-        return run_job(settings, job)
+        # claim_by_id tek UPDATE ... RETURNING ile hem atomik claim yapar hem
+        # tüm job alanlarını döner. Ayrı SELECT (1 D1 okuma) gereksizdi.
+        return run_job(settings, {"id": job_id})
 
     @modal_app.function(schedule=modal.Period(minutes=1), timeout=120)
     def modal_dispatcher() -> dict[str, int]:
         from api.config import get_settings
         from api.db import D1Client
-        from api.repositories import jobs as job_repo
 
-        log.info("Dispatcher çalışıyor (build=2026-11-18-c)")
+        log.info("Dispatcher çalışıyor (build=2026-11-18-d)")
         settings = get_settings()
         db = D1Client(**settings.d1_config)
         try:
-            queued = job_repo.queued_count(db)
+            # Önce COUNT(*) + sonra SELECT = iki D1 isteğiydi. Satır sayısı
+            # zaten elimizde; ikinci sorguyu kaldırdık.
             rows = db.query(
                 "SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 20"
             )
@@ -212,7 +208,7 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
             db.close()
         for row in rows:
             modal_index_job.spawn(str(row["id"]))
-        return {"queued": queued, "spawned": len(rows)}
+        return {"queued": len(rows), "spawned": len(rows)}
 
 except ImportError:
     modal_app = None  # type: ignore[assignment]

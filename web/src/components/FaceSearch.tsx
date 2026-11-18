@@ -11,11 +11,11 @@ import {
   type FormEvent,
 } from "react";
 import ResultCard from "@/components/ResultCard";
-import { ApiError, downloadMatchesZip, searchFace } from "@/lib/api";
+import { ApiError, downloadMatchesZip, embedFace, searchFace } from "@/lib/api";
 import {
   fingerprintFile,
+  findSimilarFace,
   getCachedSearch,
-  searchCacheKey,
   setCachedSearch,
 } from "@/lib/searchCache";
 import type { SearchResponse } from "@/lib/types";
@@ -31,6 +31,7 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
   const [visibleCount, setVisibleCount] = useState(0);
   const [revealReady, setRevealReady] = useState(false);
   const [fromCache, setFromCache] = useState(false);
+  const [cacheNote, setCacheNote] = useState("");
   const [quality, setQuality] = useState<Quality>(720);
   const [zipBusy, setZipBusy] = useState(false);
   const [zipError, setZipError] = useState("");
@@ -160,17 +161,37 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     setResults(null);
     setZipError("");
     setFromCache(false);
+    setCacheNote("");
     try {
-      // Aynı yüz + aynı etkinlik daha önce taranmışsa sunucuya hiç gitme.
-      const key = searchCacheKey(folderKey, await fingerprintFile(file));
-      const cached = getCachedSearch(key);
-      if (cached) {
+      const fingerprint = await fingerprintFile(file);
+
+      // 1) Aynı yüz + aynı etkinlik: 0 istek, 0 D1 okuması.
+      const exact = await getCachedSearch(folderKey, fingerprint);
+      if (exact) {
         setFromCache(true);
-        setResults(cached);
+        setCacheNote("AYNI YÜZ · ÖNBELLEKTEN · SUNUCUYA GİTİLMEDİ");
+        setResults(exact);
         return;
       }
-      const fresh = await searchFace(folderKey, file);
-      setCachedSearch(key, fresh);
+
+      // 2) Vektörü D1'siz al; yalnızca BU etkinliğin önbelleğinde benzer ara.
+      const embedding = await embedFace(file);
+      const similar = embedding.length
+        ? await findSimilarFace(folderKey, embedding)
+        : null;
+      if (similar) {
+        setFromCache(true);
+        setCacheNote(
+          `BENZER YÜZ %${Math.round(similar.similarity * 100)} · ÖNBELLEKTEN · SUNUCUYA GİTİLMEDİ`,
+        );
+        setResults(similar.results);
+        return;
+      }
+
+      // 3) Yeni yüz: tek D1 sorgusuyla ara, sonra kalıcı önbelleğe yaz.
+      const fresh = await searchFace(folderKey, file, undefined, embedding);
+      const vector = embedding.length ? embedding : (fresh.query_embedding ?? []);
+      await setCachedSearch(folderKey, fingerprint, vector, fresh);
       setResults(fresh);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Arama başarısız.");
@@ -204,7 +225,7 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
         <div className="eyebrow">01 / YÜZ TANIMA</div>
         <h2 className="face-stage-title">Kendini bul.</h2>
         <p className="face-stage-lead">
-          Yüzünü yükle ya da kameralı çek. Bu etkinliğin kareleri arasında
+          Yüzünü yükle ya da kameradan çek. Bu etkinliğin kareleri arasında
           sana ait olanları bulalım.
         </p>
       </div>
@@ -305,7 +326,7 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
               {busy ? "ARANIYOR..." : "FOTOĞRAFLARIMI BUL →"}
             </button>
             <div className="face-privacy-note">
-              Yüz verin saklanmaz. Sonuçlar yalnızca bu tarayıcıda geçici tutulur.
+              Yüz verin sunucuda saklanmaz; sonuçlar yalnızca bu tarayıcıda tutulur.
             </div>
           </form>
         </div>
@@ -331,7 +352,11 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
             <p className="caption">
               <strong>{results.count} fotoğraf bulundu.</strong> En yüksek benzerlik: %
               {Math.round(allResults[0].score * 100)} · {results.took_ms} ms
-              {fromCache && <span className="cache-badge">ÖNBELLEKTEN · SUNUCUYA GİTİLMEDİ</span>}
+              {fromCache && (
+                <span className="cache-badge">
+                  {cacheNote || "ÖNBELLEKTEN · SUNUCUYA GİTİLMEDİ"}
+                </span>
+              )}
             </p>
             <div className="results-download">
               <label className="quality-select">
