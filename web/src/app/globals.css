@@ -494,7 +494,6 @@ textarea.input { min-height: 120px; resize: vertical; }
   letter-spacing: -.06em; margin: 6px 0 9px;
 }
 .face-stage-lead { font-size: .86rem; line-height: 1.55; color: var(--muted); max-width: 640px; margin: 0; }
-.face-stage-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .6fr); }
 .face-input-panel { padding: 20px; border-right: 1px solid var(--line); min-width: 0; }
 .face-tabs { display: flex; border: 1px solid var(--line); margin-bottom: 14px; }
 .face-tabs button {
