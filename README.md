@@ -76,6 +76,14 @@ python -m worker.index_job            # index worker
 - `MOMENZ_RESEND_API_KEY` Render dashboard'da tanımlı olmalı.
 - `.env`, `credentials.json`, `.streamlit/secrets.toml` git'e girmez.
 
+**Bellek (Render free 512 MB):** yüz modeli ilk aramada tembel yüklenir;
+klasör matris cache'i tek klasörle sınırlıdır ve eskisi yenisi kurulmadan
+serbest bırakılır. Aramalar threadpool'da tek sıraya alınır, ZIP indirmeleri
+parça parça akar. Ölçülen RSS: açılış ~127 MB, arama sonrası ~282 MB.
+
+**Eşleşen fotoğraf indirme:** her kartta Drive'dan indirme bağlantısı ve
+sonuç üstünde 720p/480p toplu ZIP indirme butonu vardır.
+
 ### Index worker'ı (Modal)
 
 Yeni etkinlik oluşturulduğunda Drive klasörünü tarayıp yüzleri D1'e yazan
@@ -83,13 +91,18 @@ worker. Mevcut klasörler zaten indexliyse gerekli değildir; yeni event
 akışı için gereklidir.
 
 ```bash
-pip install "modal>=0.64,<1"
-modal token new                       # ilk kez
-# Modal dashboard > Secrets > "momenz" adlı secret'i oluştur:
+# Modal Python 3.14'ü desteklemiyor; proje venv'inden ayrı 3.12 venv:
+/home/ocal/.pyenv/versions/3.12.8/bin/python3.12 -m venv .venv-modal
+.venv-modal/bin/pip install "modal>=0.64,<1"
+.venv-modal/bin/modal token new       # ilk kez, tarayıcıdan giriş
+
+# Secret'ı .env'den oluştur (değerler komut satırına yazılmaz):
+.venv-modal/bin/python scripts/setup_modal_secret.py
 #   MOMENZ_D1_ACCOUNT_ID, MOMENZ_D1_DATABASE_ID, MOMENZ_D1_API_TOKEN,
 #   MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON (tek satır JSON),
 #   MOMENZ_ENVIRONMENT=prod
-modal deploy worker/index_job.py      # app: modal_app
+
+.venv-modal/bin/modal deploy worker/index_job.py   # app: modal_app
 ```
 
 Deploy sonrası `modal_dispatcher` dakikada bir kuyruğu kontrol eder ve
