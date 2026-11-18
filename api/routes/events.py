@@ -5,8 +5,11 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi.responses import StreamingResponse
 
 from core.image_utils import encode_jpeg_bytes
+from core.mem import release_memory
+from core.zip_stream import stream_zip
 
 from ..config import Settings, get_settings
 from ..db import D1Client
@@ -15,6 +18,7 @@ from ..errors import Forbidden, NotFound
 from ..repositories import events as repo
 from ..repositories import index as index_repo
 from ..schemas import (
+    BulkDownloadIn,
     EventCreateIn,
     EventListOut,
     EventOut,
@@ -156,4 +160,51 @@ def public_thumb(
         data,
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
+    )
+
+
+@public_router.post("/folders/{folder_key}/photos/download.zip")
+def public_photos_zip(
+    folder_key: str,
+    payload: BulkDownloadIn,
+    db: D1Client = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> StreamingResponse:
+    """Eşleşen fotoğrafları seçilen çözünürlükte ZIP olarak indir."""
+    if not repo.is_public_folder(db, folder_key):
+        raise Forbidden("Bu klasör herkese açık değil.")
+    # Kullanıcıya ait olmayan dosya ID'leriyle klassörü geçmeyi engelle.
+    ids = index_repo.file_ids(db, folder_key, payload.file_ids)
+    if not ids:
+        raise NotFound("İndirilecek fotoğraf bulunamadı.")
+
+    from ..services.drive import get_drive_client
+
+    client = get_drive_client(settings)
+    size = min(max(payload.size, 320), 2048)
+
+    def images():
+        # Tek seferde yalnızca bir fotoğraf RAM'de; ZIP parça parça akar.
+        for file_id in ids:
+            try:
+                image = client.fetch_image(file_id, size)
+                if image is None:
+                    continue
+                yield f"{file_id}.jpg", encode_jpeg_bytes(image, quality=82)
+            except Exception:
+                # Tek bir bozuk dosya tüm indirmeyi bozmasın.
+                continue
+
+    def generate():
+        try:
+            yield from stream_zip(images())
+        finally:
+            release_memory()
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="momenz-{folder_key[:24]}.zip"'
+        },
     )

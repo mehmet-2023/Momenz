@@ -73,7 +73,9 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
 
     # ---------------------------------------------------------------- search
-    search_cache_max_folders: int = 8
+    # Render free 512 MB: klasör başına ~20 MB matris + metadata; tek klasör
+    # sıcak tutulur, diğer klasöre geçince eskisi derhal serbest bırakılır.
+    search_cache_max_folders: int = 1
     search_default_threshold: float = 0.50
     search_max_results: int = 200
     preview_thumb_size: int = 384

@@ -42,9 +42,10 @@ export type SearchResult = {
   score: number;
   width: number;
   height: number;
-  thumb_url: string;
-  download_url: string;
+  thumb_url: string | null;
+  download_url: string | null;
   drive_url: string;
+  drive_download_url: string | null;
 };
 
 export type SearchResponse = {

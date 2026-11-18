@@ -8,7 +8,6 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from core.face_engine import FaceEngine, ensure_models
 
 from .config import Settings, get_settings
 from .db import D1Client, D1Error
@@ -72,15 +71,8 @@ async def lifespan(app: FastAPI):
             exc,
         )
 
-    # Model dosyaları yoksa indirilir; sadece bir kez, başlangıçta.
-    try:
-        yunet, sface = ensure_models()
-        app.state.face_engine = FaceEngine(yunet, sface)
-        log.info("Yüz modeli hazır.")
-    except Exception as exc:  # model hatası API'yi öldürmesin
-        app.state.face_engine = None
-        log.error("Yüz modeli yüklenemedi: %s", exc)
-
+    # Yüz modeli ilk aramada tembel olarak yüklenir (api.services.face).
+    # Böylece health check ve statik istekler 100+ MB model RAM'i harcamaz.
     yield
 
     db.close()

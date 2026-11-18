@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import time
-import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 
 from core.image_utils import encode_jpeg_bytes
+from core.mem import release_memory
+from core.zip_stream import stream_zip
 
 from ..config import Settings, get_settings
 from ..db import D1Client
@@ -111,20 +111,21 @@ def preview_zip(
 
     client = get_drive_client(settings)
 
-    def generate():
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
-            for file_id in ids:
-                try:
-                    image = client.fetch_image(file_id, settings.preview_thumb_size)
-                    if image is None:
-                        continue
-                    archive.writestr(
-                        f"{file_id}.jpg", encode_jpeg_bytes(image, quality=80)
-                    )
-                except Exception:
+    def images():
+        for file_id in ids:
+            try:
+                image = client.fetch_image(file_id, settings.preview_thumb_size)
+                if image is None:
                     continue
-        yield buffer.getvalue()
+                yield f"{file_id}.jpg", encode_jpeg_bytes(image, quality=80)
+            except Exception:
+                continue
+
+    def generate():
+        try:
+            yield from stream_zip(images())
+        finally:
+            release_memory()
 
     return StreamingResponse(
         generate(),

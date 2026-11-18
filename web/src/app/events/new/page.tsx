@@ -53,17 +53,30 @@ export default function NewEventPage() {
   }, []);
 
   // Indexleme sırasında job durumunu yokla; bitince dur.
+  // 4 sn'den başlayıp 8 sn'ye çıkan aralık: Vercel hit kotasını korur.
   useEffect(() => {
     if (!job || TERMINAL.includes(job.status)) return;
-    const id = window.setInterval(async () => {
+    let delay = 4000;
+    let timer = 0;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
       try {
         const current = await getJob(job.id);
+        if (cancelled) return;
         setJob(current);
+        delay = 4000;
+        if (TERMINAL.includes(current.status)) return;
       } catch {
-        // Geçici ağ hatası: bir sonraki turda tekrar dene.
+        delay = Math.min(8000, delay * 2);
       }
-    }, 2000);
-    return () => window.clearInterval(id);
+      timer = window.setTimeout(() => void tick(), delay);
+    };
+    timer = window.setTimeout(() => void tick(), delay);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [job?.id, job?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(e: FormEvent) {

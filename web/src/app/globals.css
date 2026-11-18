@@ -518,26 +518,36 @@ textarea.input { min-height: 120px; resize: vertical; }
   margin-top: 10px; font-family: var(--font-mono), monospace;
   font-size: .56rem; letter-spacing: .08em; color: var(--muted);
 }
-.face-how { padding: 22px 20px; background: var(--soft); }
-.face-how-label {
-  font-family: var(--font-mono), monospace; font-size: .58rem;
-  letter-spacing: .16em; color: var(--muted); margin-bottom: 16px;
-}
-.face-how ol { list-style: none; margin: 0; padding: 0; }
-.face-how li {
-  display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); font-size: .8rem;
-}
-.face-how li b { font-family: var(--font-mono), monospace; font-size: .66rem; }
-.face-how-foot {
-  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);
-  font-family: var(--font-mono), monospace; font-size: .54rem;
-  letter-spacing: .12em; color: var(--muted);
-}
 .face-empty {
   margin-top: 16px; border: 1px dashed var(--line); padding: 18px;
   font-size: .84rem; color: var(--muted);
 }
 .face-results { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 18px; }
+.results-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.results-toolbar .caption { margin: 0; }
+.results-download { display: flex; align-items: stretch; gap: 8px; }
+.quality-select { display: flex; align-items: center; border: 1px solid var(--line); }
+.quality-select span {
+  padding: 0 8px; font-family: var(--font-mono), monospace;
+  font-size: .55rem; letter-spacing: .1em; color: var(--muted);
+}
+.quality-select select {
+  border: 0; border-left: 1px solid var(--line); background: var(--paper);
+  color: var(--ink); padding: .42rem .5rem; border-radius: 0; outline: none;
+  font-family: var(--font-mono), monospace; font-size: .58rem; cursor: pointer;
+}
+.result-reveal { animation: resultIn .3s ease-out both; }
+@keyframes resultIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.results-loading {
+  margin-top: 12px; font-family: var(--font-mono), monospace;
+  font-size: .56rem; letter-spacing: .12em; color: var(--muted);
+}
 
 .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .photo-tile {
@@ -945,6 +955,9 @@ textarea.input { min-height: 120px; resize: vertical; }
   .log-label { border-right: 0; border-bottom: 1px solid var(--line); }
   .console-info { padding: 22px 18px; }
   .face-stage-head { padding: 18px; }
-  .face-input-panel, .face-how { padding: 16px; }
+  .face-input-panel { padding: 16px; }
+  .results-toolbar { align-items: flex-start; flex-direction: column; }
+  .results-download { width: 100%; }
+  .results-download .btn { flex: 1; }
   .face-drop, .face-camera, .face-camera video { min-height: 230px; height: 230px; }
 }

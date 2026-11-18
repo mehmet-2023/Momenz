@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from core.mem import release_memory
 from core.pipeline import search_embeddings
 
 from ..config import Settings
@@ -73,14 +74,19 @@ class SearchService:
             if entry is not None and entry.version == version:
                 entry.last_used = time.monotonic()
                 return entry.matrix, entry.metas
+            # Yeni matrisi kurmadan ÖNCE eskisini bırak: 512 MB Render'da iki
+            # klasörün matrisi aynı anda tutulursa OOM oluyordu.
+            self._entries.clear()
+            self._locks.clear()
+            release_memory()
             matrix, metas = index_repo.fetch_matrix(db, folder_key)
+            self._lock_for(folder_key)  # temizlenen kilidi yeniden kaydet.
             self._entries[folder_key] = _Entry(
                 version=version,
                 matrix=matrix,
                 metas=metas,
                 last_used=time.monotonic(),
             )
-            self._evict_if_needed()
             return matrix, metas
 
     def search(

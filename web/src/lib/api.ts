@@ -32,8 +32,18 @@ function cookie(name: string): string | null {
   return found ? decodeURIComponent(found.slice(name.length + 1)) : null;
 }
 
-export async function ensureCsrf(): Promise<void> {
-  await fetch(`${BASE}/auth/csrf`, { credentials: "include" });
+let csrfPromise: Promise<void> | null = null;
+
+/** CSRF cookie'sini oturum başına yalnızca bir kez alır (Vercel hit tasarrufu). */
+export function ensureCsrf(): Promise<void> {
+  if (!csrfPromise) {
+    csrfPromise = fetch(`${BASE}/auth/csrf`, { credentials: "include" })
+      .then(() => undefined)
+      .catch(() => {
+        csrfPromise = null;
+      });
+  }
+  return csrfPromise;
 }
 
 export async function apiResponse(
@@ -190,4 +200,37 @@ export async function searchFace(
   form.append("file", file);
   if (threshold !== undefined) form.append("threshold", String(threshold));
   return api<SearchResponse>("/search", { method: "POST", body: form });
+}
+
+/** Eşleşen fotoğrafları seçilen çözünürlükte ZIP olarak indirir. */
+export async function downloadMatchesZip(
+  folderKey: string,
+  fileIds: string[],
+  size: 480 | 720 = 720,
+): Promise<void> {
+  const response = await apiResponse(
+    `/public/folders/${encodeURIComponent(folderKey)}/photos/download.zip`,
+    {
+      method: "POST",
+      body: JSON.stringify({ file_ids: fileIds, size }),
+    },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const error = data?.error || {};
+    throw new ApiError(
+      response.status,
+      error.code || "download_failed",
+      error.message || "İndirme başarısız oldu.",
+    );
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `momenz-${folderKey.slice(0, 16)}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

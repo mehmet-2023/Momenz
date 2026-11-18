@@ -78,10 +78,7 @@ def create_event(
         owner_id=owner_id,
         folder_key=folder.key,
         title=title,
-        description=(
-            "Bu etkinliğin fotoğrafları Drive klasöründen alındı. "
-            "Yüzünü yükleyerek sana ait kareleri bulabilirsin."
-        ),
+        description="",
     )
     created = repo.get_by_folder(db, folder.key, owner_id)
     if not created:

@@ -8,7 +8,6 @@ import FaceSearch from "@/components/FaceSearch";
 import { useAuth } from "@/components/AuthProvider";
 import {
   ApiError,
-  auth,
   ensureCsrf,
   getEvent,
   getEventPhotos,
@@ -20,7 +19,7 @@ import type { Event, EventPhoto } from "@/lib/types";
 export default function EventDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
-  const { me, setMe } = useAuth();
+  const { me } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,8 +47,7 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     void ensureCsrf();
-    void auth.me().then(setMe).catch(() => setMe(null));
-  }, [setMe]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -129,18 +127,6 @@ export default function EventDetailPage() {
             </div>
 
             <FaceSearch folderKey={event.folder_key} />
-
-            <div className="detail-cover detail-cover-small">
-              {event.cover_url ? (
-                <img src={event.cover_url} alt="" />
-              ) : (
-                <div className="detail-cover-empty">BU ETKİNLİĞİN KAPAĞI YOK</div>
-              )}
-            </div>
-
-            {event.description && (
-              <p className="detail-desc">{event.description}</p>
-            )}
 
             <section className="gallery-section">
               <div className="section-head compact">

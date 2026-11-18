@@ -4,11 +4,15 @@ import type { SearchResult } from "@/lib/types";
 export default function ResultCard({ result }: { result: SearchResult }) {
   return (
     <div className="card">
-      <img
-        className="result-img"
-        src={result.thumb_url}
-        alt={result.name || result.file_id}
-      />
+      {result.thumb_url ? (
+        <img
+          className="result-img"
+          src={result.thumb_url}
+          alt={result.name || result.file_id}
+        />
+      ) : (
+        <div className="result-img" aria-hidden="true" />
+      )}
       <div className="score" style={{ marginTop: 10 }}>
         %{Math.round(result.score * 100)} eşleşme
       </div>
@@ -16,13 +20,28 @@ export default function ResultCard({ result }: { result: SearchResult }) {
         {result.name || result.file_id}
       </div>
       <div className="result-actions">
-        {result.download_url && (
-          <a className="btn btn-small" href={result.download_url} download>
-            İndir
+        {result.drive_download_url ? (
+          <a
+            className="btn btn-small"
+            href={result.drive_download_url}
+            target="_blank"
+            rel="noreferrer"
+            download
+          >
+            DRIVE'DAN İNDİR
           </a>
-        )}
-        <a className="btn btn-small" href={result.drive_url} target="_blank" rel="noreferrer">
-          Drive
+        ) : result.download_url ? (
+          <a className="btn btn-small" href={result.download_url} download>
+            İNDİR
+          </a>
+        ) : null}
+        <a
+          className="btn btn-small"
+          href={result.drive_url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          DRIVE'DA AÇ
         </a>
       </div>
     </div>

@@ -7,12 +7,19 @@ import numpy as np
 from PIL import Image, ImageOps
 
 
-def decode_image_bytes(data: bytes) -> np.ndarray | None:
-    """Bytes -> BGR numpy image. Bozuk/HTML yanıtlarında None döner."""
+def decode_image_bytes(data: bytes, max_side: int | None = None) -> np.ndarray | None:
+    """Bytes -> BGR numpy image. Bozuk/HTML yanıtlarında None döner.
+
+    ``max_side`` verilirse JPEG/PNG decode sırasında ölçek düşürülür; 12 MB'lık
+    bir fotoğrafın tamamını RAM'e açmak yerine gereken çözünürlükte açılır.
+    """
     if not data or len(data) < 64:
         return None
     try:
         with Image.open(io.BytesIO(data)) as pil_image:
+            if max_side:
+                # PIL draft yalnızca işaretçiyi değiştirir, piksel verisini kopyalamaz.
+                pil_image.draft("RGB", (int(max_side), int(max_side)))
             pil_image = ImageOps.exif_transpose(pil_image)
             rgb = pil_image.convert("RGB")
             return cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)

@@ -9,6 +9,7 @@ credentials.json
 __pycache__/
 *.py[cod]
 .venv/
+.venv-modal/
 venv/
 .python-version
 

@@ -21,6 +21,9 @@ services:
         value: momenz.onrender.com,localhost
       - key: MOMENZ_CORS_ORIGINS
         value: https://momenz.vercel.app
+      # 512 MB sınırı için bellek ayarları (kod varsayılanlarıyla aynı).
+      - key: MOMENZ_SEARCH_CACHE_MAX_FOLDERS
+        value: "1"
       - key: MOMENZ_WEB_BASE_URL
         value: https://momenz.vercel.app
       - key: MOMENZ_MAIL_RESET_URL

@@ -156,6 +156,7 @@ class SearchResultOut(BaseModel):
     thumb_url: str | None = None
     download_url: str | None = None
     drive_url: str | None = None
+    drive_download_url: str | None = None
 
 
 class SearchOut(BaseModel):
@@ -168,6 +169,11 @@ class SearchOut(BaseModel):
 class PreviewZipIn(BaseModel):
     folder_key: str
     file_ids: list[str] = Field(default_factory=list, max_length=500)
+
+
+class BulkDownloadIn(BaseModel):
+    file_ids: list[str] = Field(default_factory=list, max_length=200)
+    size: int = Field(default=720, ge=320, le=2048)
 
 
 # ------------------------------------------------------------------ misc

@@ -11,16 +11,21 @@ import {
   type FormEvent,
 } from "react";
 import ResultCard from "@/components/ResultCard";
-import { ApiError, searchFace } from "@/lib/api";
+import { ApiError, downloadMatchesZip, searchFace } from "@/lib/api";
 import type { SearchResponse } from "@/lib/types";
 
 type Mode = "upload" | "camera";
+type Quality = 480 | 720;
 
 export default function FaceSearch({ folderKey }: { folderKey: string }) {
   const [mode, setMode] = useState<Mode>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [results, setResults] = useState<SearchResponse | null>(null);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [quality, setQuality] = useState<Quality>(720);
+  const [zipBusy, setZipBusy] = useState(false);
+  const [zipError, setZipError] = useState("");
   const [error, setError] = useState("");
   const [cameraError, setCameraError] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
@@ -75,6 +80,21 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     };
   }, [stopCamera]);
 
+  // Eşleşen fotoğraflar tek seferde değil, kısa aralıklarla sırayla görünür.
+  useEffect(() => {
+    const total = results?.results.length ?? 0;
+    setVisibleCount(0);
+    if (!total) return;
+    const step = Math.max(1, Math.ceil(total / 24));
+    let shown = 0;
+    const timer = window.setInterval(() => {
+      shown = Math.min(total, shown + step);
+      setVisibleCount(shown);
+      if (shown >= total) window.clearInterval(timer);
+    }, 170);
+    return () => window.clearInterval(timer);
+  }, [results]);
+
   function pick(next: File | null) {
     if (!next) return;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -84,6 +104,7 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     setFile(next);
     setResults(null);
     setError("");
+    setZipError("");
   }
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -121,6 +142,7 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     setBusy(true);
     setError("");
     setResults(null);
+    setZipError("");
     try {
       setResults(await searchFace(folderKey, file));
     } catch (cause) {
@@ -129,6 +151,25 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
       setBusy(false);
     }
   }
+
+  async function downloadAll() {
+    if (!results?.results.length) return;
+    setZipBusy(true);
+    setZipError("");
+    try {
+      await downloadMatchesZip(
+        folderKey,
+        results.results.map((item) => item.file_id),
+        quality,
+      );
+    } catch (cause) {
+      setZipError(cause instanceof ApiError ? cause.message : "ZIP indirilemedi.");
+    } finally {
+      setZipBusy(false);
+    }
+  }
+
+  const allResults = results?.results ?? [];
 
   return (
     <section className="face-stage" id="kendini-bul">
@@ -241,33 +282,54 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
             </div>
           </form>
         </div>
-
-        <div className="face-how">
-          <div className="face-how-label">NASIL ÇALIŞIR</div>
-          <ol>
-            <li><b>01</b><span>Yüzünü ver</span></li>
-            <li><b>02</b><span>Bu etkinliğin fotoğrafları taranır</span></li>
-            <li><b>03</b><span>Sana ait kareler çıkar</span></li>
-          </ol>
-          <div className="face-how-foot">YALNIZCA BU ETKİNLİK · KİŞİYE ÖZEL</div>
-        </div>
       </div>
 
       {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
 
-      {results === null ? null : results.count === 0 ? (
+      {results === null ? null : allResults.length === 0 ? (
         <div className="face-empty">Bu etkinlikte yüzünle eşleşen fotoğraf bulunamadı.</div>
       ) : (
         <div className="face-results">
-          <p className="caption">
-            <strong>{results.count} fotoğraf bulundu.</strong> En yüksek benzerlik: %
-            {Math.round(results.results[0].score * 100)} · {results.took_ms} ms
-          </p>
+          <div className="results-toolbar">
+            <p className="caption">
+              <strong>{results.count} fotoğraf bulundu.</strong> En yüksek benzerlik: %
+              {Math.round(allResults[0].score * 100)} · {results.took_ms} ms
+            </p>
+            <div className="results-download">
+              <label className="quality-select">
+                <span>KALİTE</span>
+                <select
+                  value={quality}
+                  onChange={(event) => setQuality(Number(event.target.value) as Quality)}
+                  aria-label="İndirme kalitesi"
+                >
+                  <option value={720}>720p</option>
+                  <option value={480}>480p</option>
+                </select>
+              </label>
+              <button
+                className="btn btn-small"
+                type="button"
+                onClick={downloadAll}
+                disabled={zipBusy}
+              >
+                {zipBusy ? "HAZIRLANIYOR..." : `TOPLU İNDİR (${allResults.length})`}
+              </button>
+            </div>
+          </div>
+          {zipError && <div className="alert alert-error">{zipError}</div>}
           <div className="grid">
-            {results.results.map((item) => (
-              <ResultCard key={item.file_id} result={item} />
+            {allResults.slice(0, visibleCount).map((item) => (
+              <div className="result-reveal" key={item.file_id}>
+                <ResultCard result={item} />
+              </div>
             ))}
           </div>
+          {visibleCount < allResults.length && (
+            <div className="results-loading">
+              FOTOĞRAFLAR YÜKLENİYOR · {visibleCount}/{allResults.length}
+            </div>
+          )}
         </div>
       )}
     </section>

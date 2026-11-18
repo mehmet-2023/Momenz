@@ -7,10 +7,13 @@ from typing import Any
 import numpy as np
 
 from core.config import EMBEDDING_SIZE
+from core.mem import release_memory
 
 from ..db import D1Client
 
-_PAGE_SIZE = 4000
+# Küçük sayfalar: D1 JSON yanıtı ve geçici Python objeleri 512 MB sınırında
+# şişmesin. Toplam satır sayısı aynı; sadece anlık bellek düşer.
+_PAGE_SIZE = 800
 
 
 def fetch_matrix(db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]:
@@ -22,6 +25,7 @@ def fetch_matrix(db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]
     embeddings: list[np.ndarray] = []
     metas: list[dict] = []
     last_id = ""
+    release_pages = 0
 
     while True:
         rows = db.query(
@@ -55,6 +59,8 @@ def fetch_matrix(db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]
                 if embedding.size != EMBEDDING_SIZE:
                     continue
                 embeddings.append(embedding.copy())
+                # Arama çıktısında yalnızca bu alanlar kullanılıyor; bbox ve
+                # det_score saklamak 31k kayıtta extra ~8 MB harcıyordu.
                 metas.append(
                     {
                         "file_id": str(row.get("file_id") or ""),
@@ -62,23 +68,24 @@ def fetch_matrix(db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]
                         "path": str(row.get("path") or ""),
                         "width": int(row.get("width") or 0),
                         "height": int(row.get("height") or 0),
-                        "bbox": (
-                            float(face.get("x") or 0.0),
-                            float(face.get("y") or 0.0),
-                            float(face.get("w") or 0.0),
-                            float(face.get("h") or 0.0),
-                        ),
-                        "det_score": float(face.get("score") or 0.0),
                     }
                 )
 
         last_id = str(rows[-1].get("file_id") or "")
-        if len(rows) < _PAGE_SIZE or not last_id:
+        more = len(rows) >= _PAGE_SIZE and bool(last_id)
+        del rows  # D1 JSON ağacını hemen serbest bırak.
+        if release_pages % 4 == 0:
+            release_memory()
+        release_pages += 1
+        if not more:
             break
 
     if not embeddings:
         return np.empty((0, EMBEDDING_SIZE), dtype=np.float32), []
-    return np.vstack(embeddings).astype(np.float32), metas
+    matrix = np.vstack(embeddings).astype(np.float32, copy=False)
+    embeddings.clear()
+    release_memory()
+    return matrix, metas
 
 
 def stats(db: D1Client, folder_key: str) -> dict[str, int]:
