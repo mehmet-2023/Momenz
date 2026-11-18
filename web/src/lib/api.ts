@@ -225,12 +225,20 @@ export async function downloadMatchesZip(
     );
   }
   const blob = await response.blob();
+  if (!blob.size || blob.size < 22) {
+    throw new ApiError(502, "empty_zip", "ZIP boş indi. Tekrar dene.");
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = `momenz-${folderKey.slice(0, 16)}.zip`;
+  link.style.display = "none";
   document.body.appendChild(link);
   link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  // Tarayıcı indirmeyi asenkron başlatıyor; URL'i hemen iptal etmek
+  // dosyanın yarım/korrupt kaydedilmesine yol açıyordu.
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 60_000);
 }

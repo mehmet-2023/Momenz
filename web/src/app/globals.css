@@ -585,6 +585,22 @@ textarea.input { min-height: 120px; resize: vertical; }
   margin-top: 12px; font-family: var(--font-mono), monospace;
   font-size: .56rem; letter-spacing: .12em; color: var(--muted);
 }
+.search-pending { margin-top: 14px; border: 1px solid var(--line); }
+.search-pending-bar { height: 3px; background: var(--soft); overflow: hidden; }
+.search-pending-bar span {
+  display: block; width: 35%; height: 100%; background: var(--ink);
+  animation: loadScan 1.4s ease-in-out infinite;
+}
+.search-pending-row {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; font-family: var(--font-mono), monospace;
+  font-size: .55rem; letter-spacing: .12em; color: var(--muted);
+}
+.cache-badge {
+  display: inline-block; margin-left: 8px; padding: 2px 6px;
+  border: 1px solid var(--line); font-family: var(--font-mono), monospace;
+  font-size: .5rem; letter-spacing: .1em; color: var(--ink);
+}
 
 .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .photo-tile {

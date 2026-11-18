@@ -164,11 +164,13 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
         modal.Image.debian_slim(python_version="3.12")
         .apt_install("libgl1", "libglib2.0-0")
         .pip_install_from_requirements("requirements-api.txt")
-        .add_local_dir("core", "/app/core")
-        .add_local_dir("api", "/app/api")
+        # add_local_* her zaman EN SON gelmeli: Modal bunları build sonrası
+        # mount eder; sonrasında bir build step gelirse deploy hata veriyor.
         # api/ ve core/ /app altında; Python path'e eklemezsek import patlar.
         .workdir("/app")
         .env({"PYTHONPATH": "/app"})
+        .add_local_dir("core", "/app/core")
+        .add_local_dir("api", "/app/api")
     )
     modal_app = modal.App(
         "momenz-indexer", image=modal_image, secrets=[modal.Secret.from_name("momenz")]

@@ -184,16 +184,26 @@ def public_photos_zip(
     size = min(max(payload.size, 320), 2048)
 
     def images():
-        # Tek seferde yalnızca bir fotoğraf RAM'de; ZIP parça parça akar.
-        for file_id in ids:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def fetch(file_id: str):
             try:
                 image = client.fetch_image(file_id, size)
                 if image is None:
-                    continue
-                yield f"{file_id}.jpg", encode_jpeg_bytes(image, quality=82)
+                    return None
+                return f"{file_id}.jpg", encode_jpeg_bytes(image, quality=82)
             except Exception:
                 # Tek bir bozuk dosya tüm indirmeyi bozmasın.
-                continue
+                return None
+
+        # Drive isteklerini küçük partiler halinde paralelleştir: 200 dosyalı
+        # bir ZIP tekthread'de Render/Vercel proxy zaman aşımına giriyordu.
+        # Parti başına en fazla 16 görsel RAM'de tutulur, akış sırası korunur.
+        for start in range(0, len(ids), 16):
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                for item in pool.map(fetch, ids[start : start + 16]):
+                    if item is not None:
+                        yield item
 
     def generate():
         try:
@@ -205,6 +215,10 @@ def public_photos_zip(
         generate(),
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="momenz-{folder_key[:24]}.zip"'
+            "Content-Disposition": f'attachment; filename="momenz-{folder_key[:24]}.zip"',
+            "Cache-Control": "no-store",
+            # Proxy'ler gövdeyi tamponlamasın; aksi halde uzun indirmede
+            # kesilen akış kullanıcıya "corrupted zip" olarak görünüyor.
+            "X-Accel-Buffering": "no",
         },
     )

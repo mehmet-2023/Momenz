@@ -12,6 +12,12 @@ import {
 } from "react";
 import ResultCard from "@/components/ResultCard";
 import { ApiError, downloadMatchesZip, searchFace } from "@/lib/api";
+import {
+  fingerprintFile,
+  getCachedSearch,
+  searchCacheKey,
+  setCachedSearch,
+} from "@/lib/searchCache";
 import type { SearchResponse } from "@/lib/types";
 
 type Mode = "upload" | "camera";
@@ -23,6 +29,8 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
   const [preview, setPreview] = useState("");
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [visibleCount, setVisibleCount] = useState(0);
+  const [revealReady, setRevealReady] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
   const [quality, setQuality] = useState<Quality>(720);
   const [zipBusy, setZipBusy] = useState(false);
   const [zipError, setZipError] = useState("");
@@ -80,19 +88,27 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     };
   }, [stopCamera]);
 
-  // Eşleşen fotoğraflar tek seferde değil, kısa aralıklarla sırayla görünür.
+  // Sonuçlar önce hazırlanır, sonra paket paket açılır: hepsi birden patlamaz.
   useEffect(() => {
     const total = results?.results.length ?? 0;
     setVisibleCount(0);
+    setRevealReady(false);
     if (!total) return;
-    const step = Math.max(1, Math.ceil(total / 24));
-    let shown = 0;
-    const timer = window.setInterval(() => {
-      shown = Math.min(total, shown + step);
-      setVisibleCount(shown);
-      if (shown >= total) window.clearInterval(timer);
-    }, 170);
-    return () => window.clearInterval(timer);
+    let timer = 0;
+    const start = window.setTimeout(() => {
+      setRevealReady(true);
+      const step = Math.max(2, Math.ceil(total / 14));
+      let shown = 0;
+      timer = window.setInterval(() => {
+        shown = Math.min(total, shown + step);
+        setVisibleCount(shown);
+        if (shown >= total) window.clearInterval(timer);
+      }, 220);
+    }, 420);
+    return () => {
+      window.clearTimeout(start);
+      window.clearInterval(timer);
+    };
   }, [results]);
 
   function pick(next: File | null) {
@@ -143,8 +159,19 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     setError("");
     setResults(null);
     setZipError("");
+    setFromCache(false);
     try {
-      setResults(await searchFace(folderKey, file));
+      // Aynı yüz + aynı etkinlik daha önce taranmışsa sunucuya hiç gitme.
+      const key = searchCacheKey(folderKey, await fingerprintFile(file));
+      const cached = getCachedSearch(key);
+      if (cached) {
+        setFromCache(true);
+        setResults(cached);
+        return;
+      }
+      const fresh = await searchFace(folderKey, file);
+      setCachedSearch(key, fresh);
+      setResults(fresh);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Arama başarısız.");
     } finally {
@@ -278,13 +305,23 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
               {busy ? "ARANIYOR..." : "FOTOĞRAFLARIMI BUL →"}
             </button>
             <div className="face-privacy-note">
-              Yüz verin saklanmaz. Yalnızca bu etkinlikle karşılaştırılır.
+              Yüz verin saklanmaz. Sonuçlar yalnızca bu tarayıcıda geçici tutulur.
             </div>
           </form>
         </div>
       </div>
 
       {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+
+      {busy && (
+        <div className="search-pending" role="status" aria-live="polite">
+          <div className="search-pending-bar"><span /></div>
+          <div className="search-pending-row">
+            <span>YÜZ KARŞILAŞTIRILIYOR</span>
+            <span>ETKİNLİK · {folderKey.slice(0, 12)}</span>
+          </div>
+        </div>
+      )}
 
       {results === null ? null : allResults.length === 0 ? (
         <div className="face-empty">Bu etkinlikte yüzünle eşleşen fotoğraf bulunamadı.</div>
@@ -294,6 +331,7 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
             <p className="caption">
               <strong>{results.count} fotoğraf bulundu.</strong> En yüksek benzerlik: %
               {Math.round(allResults[0].score * 100)} · {results.took_ms} ms
+              {fromCache && <span className="cache-badge">ÖNBELLEKTEN · SUNUCUYA GİTİLMEDİ</span>}
             </p>
             <div className="results-download">
               <label className="quality-select">
@@ -318,6 +356,11 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
             </div>
           </div>
           {zipError && <div className="alert alert-error">{zipError}</div>}
+          {!revealReady && (
+            <div className="results-loading">
+              PAKETLER HAZIRLANIYOR · {allResults.length} SONUÇ
+            </div>
+          )}
           <div className="grid">
             {allResults.slice(0, visibleCount).map((item) => (
               <div className="result-reveal" key={item.file_id}>
@@ -325,9 +368,9 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
               </div>
             ))}
           </div>
-          {visibleCount < allResults.length && (
+          {revealReady && visibleCount < allResults.length && (
             <div className="results-loading">
-              FOTOĞRAFLAR YÜKLENİYOR · {visibleCount}/{allResults.length}
+              PAKET {visibleCount}/{allResults.length} AÇILIYOR
             </div>
           )}
         </div>
