@@ -336,6 +336,43 @@ img { max-width: 100%; }
 .skeleton-line.medium { width: 62%; }
 .skeleton-hero { height: 320px; border: 1px solid var(--line); margin-bottom: 20px; }
 
+/* --------------------------------------------------- initial loading */
+.load-screen { border: 1px solid var(--line); background: var(--paper); }
+.load-top {
+  display: flex; align-items: center; gap: 14px; padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.load-mark { font-size: 1.1rem; animation: pulse 1s ease-in-out infinite; }
+.load-heading { flex: 1; }
+.load-title {
+  font-family: var(--font-mono), monospace; font-weight: 700;
+  font-size: 1.05rem; letter-spacing: -.03em; margin-top: 4px;
+}
+.load-counter {
+  font-family: var(--font-mono), monospace; font-size: .9rem;
+  letter-spacing: .2em; animation: pulse 1.4s ease-in-out infinite;
+}
+.load-bar { height: 3px; background: var(--soft); overflow: hidden; }
+.load-bar span {
+  display: block; width: 38%; height: 100%; background: var(--ink);
+  animation: loadScan 1.6s ease-in-out infinite;
+}
+.load-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 20px;
+}
+.load-cell { aspect-ratio: 4 / 3; border: 1px solid var(--line); }
+.load-screen-form .load-grid { grid-template-columns: repeat(2, 1fr); }
+.load-foot {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 20px; border-top: 1px solid var(--line);
+  font-family: var(--font-mono), monospace; font-size: .52rem;
+  letter-spacing: .1em; color: var(--muted);
+}
+@keyframes loadScan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(360%); }
+}
+
 /* --------------------------------------------------------- empty + CTA */
 .empty-state {
   border: 1px dashed var(--line); padding: 64px 24px; text-align: center;
@@ -956,6 +993,8 @@ textarea.input { min-height: 120px; resize: vertical; }
   .console-info { padding: 22px 18px; }
   .face-stage-head { padding: 18px; }
   .face-input-panel { padding: 16px; }
+  .load-grid { grid-template-columns: repeat(2, 1fr); padding: 14px; }
+  .load-foot { padding: 10px 14px; }
   .results-toolbar { align-items: flex-start; flex-direction: column; }
   .results-download { width: 100%; }
   .results-download .btn { flex: 1; }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import FaceSearch from "@/components/FaceSearch";
+import LoadingScreen from "@/components/LoadingScreen";
 import { useAuth } from "@/components/AuthProvider";
 import {
   ApiError,
@@ -103,10 +104,7 @@ export default function EventDetailPage() {
       {notice && <div className="alert">{notice}</div>}
 
       {loading ? (
-        <div className="detail-skeleton">
-          <div className="skeleton skeleton-hero" />
-          <div className="skeleton skeleton-line" />
-        </div>
+        <LoadingScreen label="ETKİNLİK YÜKLENİYOR" />
       ) : !event ? (
         <div className="empty-state">
           <div className="empty-mark">404</div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import LoadingScreen from "@/components/LoadingScreen";
 import { ApiError, createEvent, ensureCsrf, getJob } from "@/lib/api";
 import type { Event, Job } from "@/lib/types";
 
@@ -110,7 +111,7 @@ export default function NewEventPage() {
   if (authLoading) {
     return (
       <main className="container page-pad">
-        <p className="caption">Yükleniyor...</p>
+        <LoadingScreen variant="form" label="OTURUM KONTROL EDİLİYOR" />
       </main>
     );
   }

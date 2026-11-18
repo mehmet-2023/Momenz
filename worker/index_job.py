@@ -7,27 +7,31 @@ import time
 import uuid
 from typing import Any
 
-from api.config import Settings, get_settings
-from api.db import D1Client
-from api.repositories import folders as folder_repo
-from api.repositories import jobs as job_repo
-from api.services.drive import get_drive_client
-from core.config import (
-    DEFAULT_DET_THRESHOLD,
-    DEFAULT_MAX_FACES,
-    DEFAULT_MIN_FACE,
-    DEFAULT_THUMB_SIZE,
-)
-from core.d1_store import D1Store
-from core.face_engine import FaceEngine, ensure_models
-from core.pg_index_store import PgIndexStore
-from core.pipeline import IndexOptions, build_index
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s | %(message)s")
 log = logging.getLogger("momenz.worker")
 
+# NOT: api/core importları fonksiyonların içinde yapılır. Modal CLI dosyayı
+# lokal olarak import edip `app` nesnesini arar; bu venv'de proje paketleri
+# kurulu olmadığı için importlar üst seviyede olmamalı. Modal görüntüsünün
+# içinde requirements-api.txt kurulu olduğundan çalışma zamanında sorun yok.
 
-def run_job(settings: Settings, job: dict) -> dict[str, Any]:
+
+def run_job(settings: Any, job: dict) -> dict[str, Any]:
+    from api.db import D1Client
+    from api.repositories import folders as folder_repo
+    from api.repositories import jobs as job_repo
+    from api.services.drive import get_drive_client
+    from core.config import (
+        DEFAULT_DET_THRESHOLD,
+        DEFAULT_MAX_FACES,
+        DEFAULT_MIN_FACE,
+        DEFAULT_THUMB_SIZE,
+    )
+    from core.d1_store import D1Store
+    from core.face_engine import FaceEngine, ensure_models
+    from core.pg_index_store import PgIndexStore
+    from core.pipeline import IndexOptions, build_index
+
     worker_id = f"{os.uname().nodename}:{uuid.uuid4().hex[:8]}"
     db = D1Client(**settings.d1_config)
     claimed = job_repo.claim_by_id(db, str(job["id"]), worker_id)
@@ -103,7 +107,10 @@ def run_job(settings: Settings, job: dict) -> dict[str, Any]:
         db.close()
 
 
-def poll_once(settings: Settings) -> bool:
+def poll_once(settings: Any) -> bool:
+    from api.db import D1Client
+    from api.repositories import jobs as job_repo
+
     db = D1Client(**settings.d1_config)
     try:
         recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
@@ -127,6 +134,8 @@ def poll_once(settings: Settings) -> bool:
 
 
 def main() -> None:
+    from api.config import get_settings
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
@@ -169,6 +178,10 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
 
     @modal_app.function(timeout=3600, cpu=2, memory=2048)
     def modal_index_job(job_id: str) -> dict[str, Any]:
+        from api.config import get_settings
+        from api.db import D1Client
+        from api.repositories import jobs as job_repo
+
         settings = get_settings()
         db = D1Client(**settings.d1_config)
         try:
@@ -181,6 +194,10 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
 
     @modal_app.function(schedule=modal.Period(minutes=1), timeout=120)
     def modal_dispatcher() -> dict[str, int]:
+        from api.config import get_settings
+        from api.db import D1Client
+        from api.repositories import jobs as job_repo
+
         settings = get_settings()
         db = D1Client(**settings.d1_config)
         try:

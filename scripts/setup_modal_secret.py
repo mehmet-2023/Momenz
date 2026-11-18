@@ -50,11 +50,20 @@ def main() -> None:
             raise SystemExit(f".env içinde {key} eksik.")
         pairs.append(f"{key}={value}")
 
-    subprocess.run(
-        [str(MODAL), "secret", "create", "momenz", *pairs, "--force"],
-        cwd=ROOT,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [str(MODAL), "secret", "create", "momenz", *pairs, "--force"],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        # Komut argümanlarında secret'lar var; traceback'i ASLA yazdırma.
+        detail = (exc.stderr or "").strip().splitlines()
+        message = detail[-1] if detail else "bilinmeyen hata"
+        raise SystemExit(f"Modal secret oluşturulamadı: {message}") from None
     print("Modal secret 'momenz' güncellendi.")
 
 
