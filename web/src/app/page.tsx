@@ -5,36 +5,16 @@ import Link from "next/link";
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FormEvent,
   type MouseEvent,
 } from "react";
 import EventCard from "@/components/EventCard";
+import HeroBackdrop from "@/components/HeroBackdrop";
 import { useAuth } from "@/components/AuthProvider";
 import { ApiError, listEvents } from "@/lib/api";
 import type { Event } from "@/lib/types";
-
-function useCountUp(target: number, duration = 900) {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!target) {
-      setValue(0);
-      return;
-    }
-    let frame = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const p = Math.min((now - start) / duration, 1);
-      setValue(Math.round(target * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [target, duration]);
-  return value;
-}
 
 function EventSkeleton() {
   return (
@@ -52,9 +32,7 @@ function EventSkeleton() {
 export default function Home() {
   const { me, loading: authLoading } = useAuth();
   const heroRef = useRef<HTMLElement>(null);
-  const coordRef = useRef<HTMLSpanElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
-  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -67,10 +45,8 @@ export default function Home() {
     try {
       const data = await listEvents({ q: query || undefined, limit: 60 });
       setEvents(data.items);
-      setTotal(data.total);
     } catch (cause) {
       setEvents([]);
-      setTotal(0);
       if (cause instanceof ApiError && cause.status >= 500) {
         setError(cause.message);
       }
@@ -96,11 +72,6 @@ export default function Home() {
     const y = event.clientY - rect.top;
     el.style.setProperty("--mx", ((x / rect.width - 0.5) * 2).toFixed(3));
     el.style.setProperty("--my", ((y / rect.height - 0.5) * 2).toFixed(3));
-    el.style.setProperty("--cx", `${x}px`);
-    el.style.setProperty("--cy", `${y}px`);
-    if (coordRef.current) {
-      coordRef.current.textContent = `${String(Math.round(x)).padStart(4, "0")}:${String(Math.round(y)).padStart(4, "0")}`;
-    }
   }
 
   function onHeroLeave() {
@@ -110,22 +81,6 @@ export default function Home() {
     el.style.setProperty("--my", "0");
   }
 
-  const { photoCount, faceCount, attendeeCount } = useMemo(
-    () =>
-      events.reduce(
-        (acc, item) => ({
-          photoCount: acc.photoCount + item.image_count,
-          faceCount: acc.faceCount + item.face_count,
-          attendeeCount: acc.attendeeCount + item.attendee_count,
-        }),
-        { photoCount: 0, faceCount: 0, attendeeCount: 0 },
-      ),
-    [events],
-  );
-
-  const shownPhotos = useCountUp(photoCount);
-  const shownFaces = useCountUp(faceCount);
-  const shownTotal = useCountUp(total);
   const selfFindHref = events[0] ? `/events/${events[0].slug}` : "/events/new";
 
   const [featured, ...rest] = events;
@@ -139,11 +94,7 @@ export default function Home() {
         onMouseMove={onHeroMove}
         onMouseLeave={onHeroLeave}
       >
-        <div className="hero-grid" aria-hidden="true" />
-        <div className="hero-scan" aria-hidden="true" />
-        <div className="hero-cursor" aria-hidden="true">
-          <span className="cursor-label" ref={coordRef} />
-        </div>
+        <HeroBackdrop />
 
         <div className="hero-inner">
           <h1 className="hero-title">
@@ -156,10 +107,7 @@ export default function Home() {
           </h1>
 
           <p className="hero-lead reveal" style={{ animationDelay: "300ms" }}>
-            Momenz, etkinliklerde çekilen fotoğrafların arasında yüzünü bulan bir
-            yüz tanıma uygulaması. Etkinliğini seç, yüzünü yükle; binlerce kare
-            arasından sana ait olanları saniyeler içinde bul. Üçüncü taraf servis
-            yok, yüz verin saklanmaz.
+            Etkinliğini seç, yüzünü yükle. Sana ait kareler sırayla gelsin.
           </p>
 
           <div className="hero-actions reveal" style={{ animationDelay: "400ms" }}>
@@ -169,25 +117,6 @@ export default function Home() {
             <a className="btn btn-ghost-light" href="#etkinlikler">
               Etkinlikleri keşfet <span aria-hidden="true">↓</span>
             </a>
-          </div>
-
-          <div className="hero-stats reveal" style={{ animationDelay: "520ms" }}>
-            <div className="hero-stat">
-              <b>{shownTotal}</b>
-              <span>Etkinlik</span>
-            </div>
-            <div className="hero-stat">
-              <b>{shownPhotos}</b>
-              <span>Fotoğraf</span>
-            </div>
-            <div className="hero-stat">
-              <b>{shownFaces}</b>
-              <span>Tespit edilen yüz</span>
-            </div>
-            <div className="hero-stat">
-              <b>{attendeeCount}</b>
-              <span>Katılımcı</span>
-            </div>
           </div>
         </div>
       </section>
