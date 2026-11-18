@@ -88,7 +88,12 @@ def list_all(
     # Etkinlik tarihi artık Drive metadata'sından geliyor; "yaklaşan" filtresi yok.
 
     sql = _SELECT + " WHERE " + " AND ".join(where)
-    sql += " ORDER BY e.created_at DESC"
+    # Drive yükleme tarihi (meta.folder_date) esas; sisteme eklenme tarihi
+    # yalnızca Drive tarihi yoksa yedek olarak kullanılır. En yeni en üstte.
+    sql += (
+        " ORDER BY COALESCE(json_extract(d.meta, '$.folder_date'), e.created_at) DESC,"
+        " e.created_at DESC"
+    )
     sql += " LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     return [_to_out(row, viewer_id) for row in db.query(sql, params)]

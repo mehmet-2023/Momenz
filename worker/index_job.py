@@ -164,6 +164,8 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
     modal_app = modal.App(
         "momenz-indexer", image=modal_image, secrets=[modal.Secret.from_name("momenz")]
     )
+    # Modal CLI `modal deploy worker/index_job.py` için standart isim.
+    app = modal_app
 
     @modal_app.function(timeout=3600, cpu=2, memory=2048)
     def modal_index_job(job_id: str) -> dict[str, Any]:

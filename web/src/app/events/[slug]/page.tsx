@@ -15,13 +15,11 @@ import {
   joinEvent,
   leaveEvent,
 } from "@/lib/api";
-import { DEMO_EVENT, DEMO_PHOTOS } from "@/lib/demo";
 import type { Event, EventPhoto } from "@/lib/types";
 
 export default function EventDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
-  const isDemo = slug === DEMO_EVENT.slug;
   const { me, setMe } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
@@ -32,14 +30,6 @@ export default function EventDetailPage() {
   const [lightbox, setLightbox] = useState<EventPhoto | null>(null);
 
   const load = useCallback(async () => {
-    // ⚠️ TEST: geçici demo etkinliği API'ye gitmeden yerel veriden göster.
-    if (isDemo) {
-      setEvent(DEMO_EVENT);
-      setPhotos(DEMO_PHOTOS);
-      setError("");
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setError("");
     try {
@@ -54,7 +44,7 @@ export default function EventDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, isDemo]);
+  }, [slug]);
 
   useEffect(() => {
     void ensureCsrf();
@@ -128,7 +118,19 @@ export default function EventDetailPage() {
       ) : (
         <div className="detail-layout">
           <div className="detail-main">
-            <div className="detail-cover">
+            <div className="detail-hero-strip">
+              <div className="eyebrow">{event.date_label || "TARİH YAKINDA"}</div>
+              <h1>{event.title}</h1>
+              <div className="detail-strip-meta">
+                <span>{event.image_count} FOTOĞRAF</span>
+                <span>{event.face_count} YÜZ</span>
+                <span>YÜZ TANIMA AKTİF</span>
+              </div>
+            </div>
+
+            <FaceSearch folderKey={event.folder_key} />
+
+            <div className="detail-cover detail-cover-small">
               {event.cover_url ? (
                 <img src={event.cover_url} alt="" />
               ) : (
@@ -136,23 +138,14 @@ export default function EventDetailPage() {
               )}
             </div>
 
-            <div className="detail-heading">
-              <div className="eyebrow">{event.date_label || "TARİH YAKINDA"}</div>
-              <h1>{event.title}</h1>
-              {event.drive_uploaded_at && (
-                <div className="detail-location">
-                  ↥ Drive yükleme: {event.date_label || event.drive_uploaded_at}
-                </div>
-              )}
-              {event.description && (
-                <p className="detail-desc">{event.description}</p>
-              )}
-            </div>
+            {event.description && (
+              <p className="detail-desc">{event.description}</p>
+            )}
 
             <section className="gallery-section">
               <div className="section-head compact">
                 <div>
-                  <div className="eyebrow">01 / FOTOĞRAFLAR</div>
+                  <div className="eyebrow">02 / FOTOĞRAFLAR</div>
                   <h2 className="section-title small">Etkinlikten kareler</h2>
                 </div>
                 <span className="meta">{photos.length} önizleme · {event.image_count} fotoğraf</span>
@@ -169,24 +162,19 @@ export default function EventDetailPage() {
                       onClick={() => setLightbox(photo)}
                       aria-label={`${photo.name} fotoğrafını büyüt`}
                     >
-                      <img src={photo.thumb_url} alt={photo.name} loading="lazy" />
+                      <img src={photo.thumb_url} alt={photo.name} />
                       <span className="photo-index">+</span>
                     </button>
                   ))}
                 </div>
               )}
             </section>
-
-            <div className="rule" />
-            <FaceSearch folderKey={event.folder_key} />
           </div>
 
           <aside className="detail-aside">
             <div className="aside-card">
               <div className="aside-label">KATILIM</div>
-              {isDemo ? (
-                <div className="aside-owner">Bu bir test etkinliğidir. Katılım devre dışı.</div>
-              ) : event.is_owner ? (
+              {event.is_owner ? (
                 <div className="aside-owner">Bu etkinliği sen ekledin.</div>
               ) : me ? (
                 <button
@@ -249,7 +237,7 @@ export default function EventDetailPage() {
             ✕
           </button>
           <img
-            src={`${lightbox.thumb_url}${lightbox.thumb_url.includes("?") ? "&" : "?"}size=1024`}
+            src={`${lightbox.thumb_url}${lightbox.thumb_url.includes("?") ? "&" : "?"}size=512`}
             alt={lightbox.name}
           />
           <div className="lightbox-caption">{lightbox.name} · ESC ile kapat</div>

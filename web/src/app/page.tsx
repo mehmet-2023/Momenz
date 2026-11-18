@@ -14,7 +14,6 @@ import {
 import EventCard from "@/components/EventCard";
 import { useAuth } from "@/components/AuthProvider";
 import { ApiError, listEvents } from "@/lib/api";
-import { DEMO_EVENT } from "@/lib/demo";
 import type { Event } from "@/lib/types";
 
 function useCountUp(target: number, duration = 900) {
@@ -67,15 +66,11 @@ export default function Home() {
     setError("");
     try {
       const data = await listEvents({ q: query || undefined, limit: 60 });
-      // ⚠️ TEST: canlı etkinlik yoksa/gerekirse demo kaydı gösterilir.
-      const merged = data.items.some((item) => item.id === DEMO_EVENT.id)
-        ? data.items
-        : [DEMO_EVENT, ...data.items];
-      setEvents(merged);
-      setTotal(data.total + (merged.length > data.items.length ? 1 : 0));
+      setEvents(data.items);
+      setTotal(data.total);
     } catch (cause) {
-      setEvents([DEMO_EVENT]);
-      setTotal(1);
+      setEvents([]);
+      setTotal(0);
       if (cause instanceof ApiError && cause.status >= 500) {
         setError(cause.message);
       }
@@ -131,7 +126,7 @@ export default function Home() {
   const shownPhotos = useCountUp(photoCount);
   const shownFaces = useCountUp(faceCount);
   const shownTotal = useCountUp(total);
-  const selfFindSlug = events[0]?.slug || DEMO_EVENT.slug;
+  const selfFindHref = events[0] ? `/events/${events[0].slug}` : "/events/new";
 
   const [featured, ...rest] = events;
 
@@ -168,7 +163,7 @@ export default function Home() {
           </p>
 
           <div className="hero-actions reveal" style={{ animationDelay: "400ms" }}>
-            <Link className="btn btn-light" href={`/events/${selfFindSlug}`}>
+            <Link className="btn btn-light" href={selfFindHref}>
               <span aria-hidden="true">⌖</span> Kendini Bul
             </Link>
             <a className="btn btn-ghost-light" href="#etkinlikler">
@@ -271,7 +266,7 @@ export default function Home() {
               <Link className="featured" href={`/events/${featured.slug}`}>
                 <div className="featured-media">
                   {featured.cover_url ? (
-                    <img src={featured.cover_url} alt="" loading="lazy" />
+                    <img src={featured.cover_url} alt="" />
                   ) : (
                     <div className="featured-placeholder">KAPAK YOK</div>
                   )}

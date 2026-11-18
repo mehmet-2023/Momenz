@@ -8,7 +8,6 @@ export default function ResultCard({ result }: { result: SearchResult }) {
         className="result-img"
         src={result.thumb_url}
         alt={result.name || result.file_id}
-        loading="lazy"
       />
       <div className="score" style={{ marginTop: 10 }}>
         %{Math.round(result.score * 100)} eşleşme
