@@ -52,7 +52,7 @@ def _to_out(row: dict, viewer_id: str = "") -> dict[str, Any]:
         "folder_key": folder_key,
         "owner_id": row.get("owner_id"),
         "cover_url": (
-            f"/api/v1/public/folders/{folder_key}/photos/{cover_id}/thumb?size=640"
+            f"/api/v1/public/folders/{folder_key}/photos/{cover_id}/thumb?size=320"
             if cover_id
             else None
         ),

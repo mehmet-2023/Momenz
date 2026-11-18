@@ -13,6 +13,7 @@ from ..db import D1Client
 from ..deps import get_db, optional_user, require_user
 from ..errors import Forbidden, NotFound
 from ..repositories import events as repo
+from ..repositories import index as index_repo
 from ..schemas import (
     EventCreateIn,
     EventListOut,
@@ -122,26 +123,37 @@ def public_photos(
 def public_thumb(
     folder_key: str,
     file_id: str,
-    size: int = Query(default=384, ge=64, le=1024),
+    size: int = Query(default=320, ge=64, le=2048),
     db: D1Client = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> Response:
     if not repo.is_public_folder(db, folder_key):
         raise Forbidden("Bu klasör herkese açık değil.")
-    allowed = {item["file_id"] for item in repo.photos(db, folder_key, 500)}
-    if file_id not in allowed:
+    # Eski linklerdeki büyük boyut isteklerini küçük önizlemeye sabitle.
+    size = min(size, 512)
+    # 20.000+ fotoğraf içinde doğrudan ID sorgusu: ilk 500'e bakmak eşleşen
+    # fotoğrafları yanlışlıkla "bulunamadı" yapıyordu.
+    if not index_repo.file_ids(db, folder_key, [file_id]):
         raise NotFound("Fotoğraf bu etkinlikte bulunamadı.")
 
     path = _thumb_cache_path(settings, file_id, size)
     if path.exists() and (time.time() - path.stat().st_mtime) < settings.thumb_cache_ttl_seconds:
-        return Response(path.read_bytes(), media_type="image/jpeg")
+        return Response(
+            path.read_bytes(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
+        )
 
     from ..services.drive import get_drive_client
 
     image = get_drive_client(settings).fetch_image(file_id, size)
     if image is None:
         raise NotFound("Önizleme alınamadı.")
-    data = encode_jpeg_bytes(image, quality=80)
+    data = encode_jpeg_bytes(image, quality=78)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
-    return Response(data, media_type="image/jpeg")
+    return Response(
+        data,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
+    )

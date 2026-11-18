@@ -88,7 +88,7 @@ async def search(
                 width=int(result.get("width") or 0),
                 height=int(result.get("height") or 0),
                 thumb_url=(
-                    f"/api/v1/public/folders/{folder_key}/photos/{file_id}/thumb"
+                    f"/api/v1/public/folders/{folder_key}/photos/{file_id}/thumb?size=320"
                     if is_public
                     else f"/api/v1/images/{file_id}/thumb?folder_key={folder_key}"
                 ),

@@ -40,26 +40,35 @@ def _thumb_path(settings: Settings, file_id: str, size: int) -> Path:
 def thumbnail(
     file_id: str,
     folder_key: str = Query(...),
-    size: int = Query(default=384, ge=64, le=1024),
+    size: int = Query(default=320, ge=64, le=2048),
     db: D1Client = Depends(get_db),
     settings: Settings = Depends(get_settings),
     user=Depends(require_user),
 ) -> Response:
     _assert_file_access(db, user.id, folder_key, file_id)
+    size = min(size, 512)
 
     path = _thumb_path(settings, file_id, size)
     if path.exists() and (time.time() - path.stat().st_mtime) < settings.thumb_cache_ttl_seconds:
-        return Response(path.read_bytes(), media_type="image/jpeg")
+        return Response(
+            path.read_bytes(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
+        )
 
     from ..services.drive import get_drive_client
 
     image = get_drive_client(settings).fetch_image(file_id, size)
     if image is None:
         raise NotFound("Önizleme alınamadı.")
-    data = encode_jpeg_bytes(image, quality=80)
+    data = encode_jpeg_bytes(image, quality=78)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
-    return Response(data, media_type="image/jpeg")
+    return Response(
+        data,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
+    )
 
 
 @router.get("/{file_id}/download")

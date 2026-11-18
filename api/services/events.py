@@ -109,7 +109,7 @@ def event_photos(db: D1Client, folder_key: str, limit: int = 24) -> EventPhotoLi
                 file_id=row["file_id"],
                 name=row["name"],
                 thumb_url=(
-                    f"/api/v1/public/folders/{folder_key}/photos/{row['file_id']}/thumb"
+                    f"/api/v1/public/folders/{folder_key}/photos/{row['file_id']}/thumb?size=320"
                 ),
                 width=row["width"],
                 height=row["height"],
