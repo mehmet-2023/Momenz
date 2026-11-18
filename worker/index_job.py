@@ -200,6 +200,7 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
         from api.db import D1Client
         from api.repositories import jobs as job_repo
 
+        log.info("Dispatcher çalışıyor (build=2026-11-18-c)")
         settings = get_settings()
         db = D1Client(**settings.d1_config)
         try:

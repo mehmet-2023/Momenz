@@ -19,6 +19,10 @@ KEYS = (
     "MOMENZ_D1_API_TOKEN",
     "MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON",
     "MOMENZ_ENVIRONMENT",
+    # Settings.prod doğrulaması bunları da istiyor; worker JWT kullanmasa bile
+    # get_settings() çağrısı prod modda patlıyordu.
+    "MOMENZ_JWT_SECRET",
+    "MOMENZ_COOKIE_SECURE",
 )
 
 
@@ -45,9 +49,19 @@ def main() -> None:
     values = _read_env(ROOT / ".env")
     pairs: list[str] = []
     for key in KEYS:
-        value = values.get(key) or ("prod" if key == "MOMENZ_ENVIRONMENT" else "")
+        default = {
+            "MOMENZ_ENVIRONMENT": "prod",
+            "MOMENZ_COOKIE_SECURE": "true",
+        }.get(key, "")
+        value = values.get(key) or default
         if not value:
             raise SystemExit(f".env içinde {key} eksik.")
+        # .env yerel geliştirme için cookie_secure=false içeriyor; Modal prod
+        # ortamında bu değer Settings doğrulamasını doğrudan reddediyor.
+        if key == "MOMENZ_COOKIE_SECURE":
+            value = "true"
+        if key == "MOMENZ_JWT_SECRET" and len(value) < 32:
+            raise SystemExit("MOMENZ_JWT_SECRET en az 32 karakter olmalı.")
         pairs.append(f"{key}={value}")
 
     try:
