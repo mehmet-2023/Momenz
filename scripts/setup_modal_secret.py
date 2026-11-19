@@ -14,9 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MODAL = ROOT / ".venv-modal" / "bin" / "modal"
 
 KEYS = (
-    "MOMENZ_D1_ACCOUNT_ID",
-    "MOMENZ_D1_DATABASE_ID",
-    "MOMENZ_D1_API_TOKEN",
+    "MOMENZ_TURSO_DATABASE_URL",
+    "MOMENZ_TURSO_AUTH_TOKEN",
     "MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON",
     "MOMENZ_ENVIRONMENT",
     # Settings.prod doğrulaması bunları da istiyor; worker JWT kullanmasa bile

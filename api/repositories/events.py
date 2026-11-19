@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..db import D1Client
+from . import index as index_repo
 
 _SELECT = """
     SELECT e.*,
@@ -167,6 +168,8 @@ def create(
             description,
         ),
     )
+    # Arama tek matris satırını okuduğu için yayın bayrağını da orada tutuyoruz.
+    index_repo.set_matrix_public(db, folder_key, True)
 
 
 def join(db: D1Client, slug: str, user_id: str) -> bool:

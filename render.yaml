@@ -28,13 +28,19 @@ services:
         value: https://momenz.vercel.app
       - key: MOMENZ_MAIL_RESET_URL
         value: https://momenz.vercel.app/sifre-sifirla?token={token}
-      - key: MOMENZ_D1_ACCOUNT_ID
+      - key: MOMENZ_TURSO_DATABASE_URL
         sync: false
-      - key: MOMENZ_D1_DATABASE_ID
-        sync: false
-      - key: MOMENZ_D1_API_TOKEN
+      - key: MOMENZ_TURSO_AUTH_TOKEN
         sync: false
       - key: MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
-      - key: MOMENZ_RESEND_API_KEY
+      - key: MOMENZ_SMTP_HOST
+        value: smtp.gmail.com
+      - key: MOMENZ_SMTP_PORT
+        value: "587"
+      - key: MOMENZ_SMTP_USER
         sync: false
+      - key: MOMENZ_SMTP_PASSWORD
+        sync: false
+      - key: MOMENZ_MAIL_FROM
+        value: Momenz <no-reply@mome.nz>

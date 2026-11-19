@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.config import get_settings
-from api.db import D1Client
+from api.db import TursoClient
 from api.repositories import users as repo
 from api.security import hash_password, new_id
 
@@ -26,8 +26,8 @@ def main() -> None:
         raise SystemExit("Kullanım: python scripts/bootstrap_admin.py <email>")
     email = sys.argv[1].strip().lower()
     settings = get_settings()
-    if not settings.d1_ready():
-        raise SystemExit("D1 ayarları eksik.")
+    if not settings.db_ready():
+        raise SystemExit("Turso ayarları eksik.")
 
     password = os.environ.get("MOMENZ_BOOTSTRAP_PASSWORD") or getpass.getpass(
         "Yönetici şifresi: "
@@ -35,7 +35,7 @@ def main() -> None:
     if len(password) < 12:
         raise SystemExit("Şifre en az 12 karakter olmalı.")
 
-    db = D1Client(**settings.d1_config)
+    db = TursoClient(**settings.db_config)
     if repo.get_by_email(db, email):
         raise SystemExit("Bu e-posta zaten kayıtlı.")
 

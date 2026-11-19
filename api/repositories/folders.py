@@ -94,6 +94,10 @@ def delete(db: D1Client, owner_id: str, folder_key: str) -> bool:
                 "params": [folder_key],
             },
             {
+                "sql": "DELETE FROM folder_matrices WHERE folder_key = ?",
+                "params": [folder_key],
+            },
+            {
                 "sql": "UPDATE jobs SET status = 'canceled', updated_at = CURRENT_TIMESTAMP WHERE folder_key = ? AND status IN ('queued','running')",
                 "params": [folder_key],
             },

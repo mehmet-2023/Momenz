@@ -229,8 +229,30 @@ def get_d1_config() -> dict[str, Any] | None:
     return None
 
 
+def get_turso_config() -> dict[str, Any] | None:
+    """Turso/libSQL bağlantı bilgisini env/secrets üzerinden okur."""
+    def pick(*names: str) -> Any:
+        for name in names:
+            value = get_secret(name)
+            if value not in (None, ""):
+                return value
+        return None
+
+    database_url = pick("MOMENZ_TURSO_DATABASE_URL", "TURSO_DATABASE_URL")
+    auth_token = pick("MOMENZ_TURSO_AUTH_TOKEN", "TURSO_AUTH_TOKEN")
+    if database_url and auth_token:
+        return {
+            "database_url": str(database_url),
+            "auth_token": str(auth_token),
+        }
+    return None
+
+
 def get_storage_config() -> tuple[str | None, dict[str, Any] | None]:
-    """Aktif veritabanı backend'ini seçer (Cloudflare D1)."""
+    """Aktif veritabanı backend'ini seçer (Turso, eski D1 fallback)."""
+    turso_config = get_turso_config()
+    if turso_config:
+        return "turso", turso_config
     d1_config = get_d1_config()
     if d1_config:
         return "d1", d1_config

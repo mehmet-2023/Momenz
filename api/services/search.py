@@ -66,6 +66,7 @@ class SearchService:
         db: D1Client,
         folder_key: str,
         version: int | None = None,
+        preloaded: tuple[np.ndarray, list[dict]] | None = None,
     ) -> tuple[np.ndarray, list[dict]]:
         # `version` arama rotasındaki tek D1 sorgusundan gelir; burada tekrar
         # okunmaz. Böylece arama başına D1 okuması en fazla 1 satırdır.
@@ -86,7 +87,16 @@ class SearchService:
             self._entries.clear()
             self._locks.clear()
             release_memory()
-            matrix, metas = index_repo.fetch_matrix(db, folder_key)
+            # Normal yol: arama rotasındaki tek sorgudan gelen BLOB. O yoksa
+            # (eski kayıt/bozuk satır) tek satırlık okuma, sonra da tam tarama
+            # fallback olarak kalır.
+            loaded = preloaded
+            if loaded is None:
+                loaded = index_repo.load_matrix(db, folder_key, int(version or 0))
+            if loaded is not None:
+                matrix, metas = loaded
+            else:
+                matrix, metas = index_repo.fetch_matrix(db, folder_key)
             self._lock_for(folder_key)  # temizlenen kilidi yeniden kaydet.
             self._entries[folder_key] = _Entry(
                 version=version,
@@ -105,9 +115,12 @@ class SearchService:
         threshold: float | None = None,
         max_results: int | None = None,
         version: int | None = None,
+        preloaded: tuple[np.ndarray, list[dict]] | None = None,
     ) -> tuple[list[dict], float]:
         started = time.perf_counter()
-        matrix, metas = self._get_matrix(db, folder_key, version=version)
+        matrix, metas = self._get_matrix(
+            db, folder_key, version=version, preloaded=preloaded
+        )
         if matrix.size == 0:
             return [], 0.0
         results = search_embeddings(

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
-from .db import D1Client, D1Error
+from .db import TursoClient, TursoError
 from .deps import get_db
 from .errors import AppError, app_error_handler, unhandled_error_handler
 from .middleware import (
@@ -19,6 +19,7 @@ from .middleware import (
     RequestIdMiddleware,
     SecurityHeadersMiddleware,
 )
+from .repositories import index as index_repo
 from .repositories import jobs as job_repo
 from .repositories import users as user_repo
 from .routes import auth, events, folders, images, jobs, search
@@ -35,30 +36,27 @@ log = logging.getLogger("momenz")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings: Settings = get_settings()
-    if not settings.d1_ready():
+    if not settings.db_ready():
         raise RuntimeError(
-            "D1 yapılandırması eksik. MOMENZ_D1_ACCOUNT_ID / "
-            "MOMENZ_D1_DATABASE_ID / MOMENZ_D1_API_TOKEN değişkenlerini ayarla."
+            "Turso yapılandırması eksik. MOMENZ_TURSO_DATABASE_URL / "
+            "MOMENZ_TURSO_AUTH_TOKEN değişkenlerini ayarla."
         )
 
-    db = D1Client(
-        settings.d1_account_id,
-        settings.d1_database_id,
-        settings.d1_api_token,
-        timeout=(settings.d1_timeout_connect, settings.d1_timeout_read),
-        max_retries=settings.d1_max_retries,
-    )
+    db = TursoClient(**settings.db_config)
     try:
         db.ping()
-    except D1Error as exc:
-        raise RuntimeError(f"D1 bağlantısı kurulamadı: {exc}") from exc
+    except TursoError as exc:
+        raise RuntimeError(f"Turso bağlantısı kurulamadı: {exc}") from exc
+    try:
+        index_repo.ensure_folder_matrices(db)
+    except TursoError as exc:
+        raise RuntimeError(f"Turso matris tablosu hazırlanamadı: {exc}") from exc
     app.state.db = db
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
 
-    # Bakım sorguları şemaya bağlıdır. Migration henüz uygulanmadıysa veya D1
-    # yazma kotası doluysa API yine de açılsın; health check yeşil kalsın ve
-    # sorun loglarda net görünsün. (Aksi halde Render deploy'u patlıyordu.)
+    # Bakım sorguları şemaya bağlıdır. Migration henüz uygulanmadıysa API yine
+    # de açılsın; health check yeşil kalsın ve sorun loglarda net görünsün.
     try:
         recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
         if recovered:
@@ -66,8 +64,7 @@ async def lifespan(app: FastAPI):
         user_repo.purge_expired(db)
     except D1Error as exc:
         log.error(
-            "D1 bakım sorguları atlandı: %s | Şema eksikse `python scripts/migrate.py` "
-            "çalıştır, yazma kotası doluysa UTC 00:00'ı bekle.",
+            "Turso bakım sorguları atlandı: %s | Şema eksikse `python scripts/migrate.py` çalıştır.",
             exc,
         )
 

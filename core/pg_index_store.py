@@ -174,6 +174,9 @@ class PgIndexStore:
         self._cache: tuple[np.ndarray, list[dict]] | None = None
         self._pending: list[dict] = []
         self._pending_limit = 100
+        # Bu çalışmada değişen dosyalar; matrisi tam taramadan güncellemek için
+        # worker'a aktarılır (artımlı index yolunda yalnızca birkaç dosya).
+        self._changed_file_ids: set[str] = set()
 
     def flush(self) -> None:
         if not self._pending:
@@ -192,6 +195,9 @@ class PgIndexStore:
 
     # ------------------------------------------------------------------ writes
 
+    def changed_file_ids(self) -> set[str]:
+        return set(self._changed_file_ids)
+
     def save_result(
         self,
         file_id: str,
@@ -207,6 +213,7 @@ class PgIndexStore:
     ) -> None:
         self._cache = None
         clear_matrix_cache(self.folder_key)
+        self._changed_file_ids.add(str(file_id))
         self._pending.append(
             {
                 "file_id": file_id,
@@ -374,6 +381,7 @@ class PgIndexStore:
     def clear(self) -> None:
         self._cache = None
         self._pending = []
+        self._changed_file_ids.clear()
         clear_matrix_cache(self.folder_key)
         clear_stats_cache(self.folder_key)
         self.pg.clear_folder(self.folder_key)

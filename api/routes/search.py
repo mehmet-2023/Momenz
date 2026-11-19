@@ -92,6 +92,7 @@ def _search(
     folder_key: str,
     threshold: float | None,
     version: int,
+    matrix_data: tuple[np.ndarray, list[dict]] | None,
 ) -> tuple[list[dict], float]:
     if probe.size == 0:
         return [], 0.0
@@ -103,6 +104,7 @@ def _search(
                 probe,
                 threshold=threshold,
                 version=version,
+                preloaded=matrix_data,
             )
         finally:
             release_memory()
@@ -135,8 +137,8 @@ async def search(
     settings: Settings = Depends(get_settings),
     user=Depends(optional_user),
 ) -> SearchOut:
-    # Tek D1 isteği: yayın durumu + index versiyonu birlikte okunur.
-    is_public, version = index_repo.public_and_version(db, folder_key)
+    # Tek Turso isteği: yayın durumu + sürüm + güncel matris BLOB'u.
+    is_public, version, matrix_data = index_repo.public_version_matrix(db, folder_key)
     if not is_public and (
         not user or not folder_repo.exists_for_user(db, user.id, folder_key)
     ):
@@ -160,6 +162,7 @@ async def search(
         folder_key,
         threshold,
         version,
+        matrix_data,
     )
 
     items: list[SearchResultOut] = []

@@ -7,6 +7,7 @@ from .store_base import StoreError
 
 if TYPE_CHECKING:  # pragma: no cover
     from .d1_store import D1Store
+    from .turso_store import TursoStore
 
 
 def create_store(
@@ -21,14 +22,17 @@ def create_store(
     if backend is None or config is None:
         backend, config = get_storage_config()
 
+    if backend == "turso" and config:
+        from .turso_store import TursoStore
+
+        return TursoStore(config)
+
     if backend == "d1" and config:
         from .d1_store import D1Store
 
         return D1Store(config)
 
     raise StoreError(
-        "Veritabanı ayarı bulunamadı. Cloudflare D1 için secrets dosyasına "
-        "[cloudflare_d1] tablosu (account_id, database_id, api_token) veya "
-        "CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_D1_DATABASE_ID / "
-        "CLOUDFLARE_D1_API_TOKEN ekleyin."
+        "Veritabanı ayarı bulunamadı. MOMENZ_TURSO_DATABASE_URL ve "
+        "MOMENZ_TURSO_AUTH_TOKEN değişkenlerini ayarlayın."
     )

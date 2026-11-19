@@ -34,7 +34,17 @@ class Settings(BaseSettings):
         default_factory=lambda: ["https://momenz.vercel.app"]
     )
 
-    # ---------------------------------------------------------------- D1
+    # ---------------------------------------------------------------- Turso
+    # Cloudflare D1, row-read kotası dolduğu için source of truth Turso'ya
+    # taşındı. Eski D1 alanları yalnızca geri dönüş/uyumluluk için duruyor.
+    turso_database_url: str = ""
+    turso_auth_token: str = ""
+    turso_timeout_connect: float = 10.0
+    # Klasör başına ~20 MB BLOB yazımı/okuması için geniş timeout.
+    turso_timeout_read: float = 600.0
+    turso_max_retries: int = 4
+
+    # Eski D1 ayarları (artık kullanılmaz; d1_config yine Turso döner).
     d1_account_id: str = ""
     d1_database_id: str = ""
     d1_api_token: str = ""
@@ -142,15 +152,24 @@ class Settings(BaseSettings):
         return self.environment.lower() in {"prod", "production", "live"}
 
     @property
-    def d1_config(self) -> dict[str, str]:
+    def db_config(self) -> dict[str, Any]:
         return {
-            "account_id": self.d1_account_id,
-            "database_id": self.d1_database_id,
-            "api_token": self.d1_api_token,
+            "database_url": self.turso_database_url,
+            "auth_token": self.turso_auth_token,
+            "timeout": (self.turso_timeout_connect, self.turso_timeout_read),
+            "max_retries": self.turso_max_retries,
         }
 
+    def db_ready(self) -> bool:
+        return bool(self.turso_database_url and self.turso_auth_token)
+
+    @property
+    def d1_config(self) -> dict[str, Any]:
+        """Eski çağrılar için uyumluluk diğer adı; Turso yapılandırması."""
+        return self.db_config
+
     def d1_ready(self) -> bool:
-        return all(self.d1_config.values())
+        return self.db_ready()
 
     def service_account_info(self) -> dict[str, Any] | None:
         """Core'un eski secrets zincirini bozmadan env'den servis hesabı üretir."""

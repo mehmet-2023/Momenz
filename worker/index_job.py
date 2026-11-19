@@ -17,8 +17,9 @@ log = logging.getLogger("momenz.worker")
 
 
 def run_job(settings: Any, job: dict) -> dict[str, Any]:
-    from api.db import D1Client
+    from api.db import TursoClient
     from api.repositories import folders as folder_repo
+    from api.repositories import index as index_repo
     from api.repositories import jobs as job_repo
     from api.services.drive import get_drive_client
     from core.config import (
@@ -27,13 +28,13 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         DEFAULT_MIN_FACE,
         DEFAULT_THUMB_SIZE,
     )
-    from core.d1_store import D1Store
+    from core.turso_store import TursoStore
     from core.face_engine import FaceEnginePool, ensure_models
     from core.pg_index_store import PgIndexStore
     from core.pipeline import IndexOptions, build_index
 
     worker_id = f"{os.uname().nodename}:{uuid.uuid4().hex[:8]}"
-    db = D1Client(**settings.d1_config)
+    db = TursoClient(**settings.db_config)
     claimed = job_repo.claim_by_id(db, str(job["id"]), worker_id)
     if not claimed:
         log.info("Job %s başka bir worker tarafından alındı.", job["id"])
@@ -47,7 +48,7 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         cpu = max(1, min(8, os.cpu_count() or 4))
         yunet, sface = ensure_models()
         engine = FaceEnginePool(yunet, sface, size=cpu, num_threads=1)
-        store = PgIndexStore(D1Store(settings.d1_config), folder_key)
+        store = PgIndexStore(TursoStore(settings.db_config), folder_key)
         client = get_drive_client(settings)
 
         last_write = {"done": -1}
@@ -91,6 +92,12 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         if total_found:
             store.set_meta("folder_count", str(total_found))
         version = folder_repo.bump_version(db, folder_key)
+        # Arama yolundaki pahalı tam taramayı kaldıran tek satırlık matris.
+        # Artımlı index'te yalnızca değişen dosyaların satırları okunur;
+        # ilk index/reindex'te mevcut matris yoksa bir kez tam tarama yapılır.
+        index_repo.update_matrix_from_changes(
+            db, folder_key, version, store.changed_file_ids()
+        )
 
         counters = summary.get("counters") or {}
         result = {
@@ -112,10 +119,10 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
 
 
 def poll_once(settings: Any) -> bool:
-    from api.db import D1Client
+    from api.db import TursoClient
     from api.repositories import jobs as job_repo
 
-    db = D1Client(**settings.d1_config)
+    db = TursoClient(**settings.db_config)
     try:
         recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
         if recovered:
@@ -143,8 +150,8 @@ def main() -> None:
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     settings = get_settings()
-    if not settings.d1_ready():
-        raise SystemExit("D1 ayarları eksik.")
+    if not settings.db_ready():
+        raise SystemExit("Turso ayarları eksik.")
     if args.once:
         poll_once(settings)
         return
@@ -193,11 +200,11 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
     @modal_app.function(schedule=modal.Period(minutes=1), timeout=120)
     def modal_dispatcher() -> dict[str, int]:
         from api.config import get_settings
-        from api.db import D1Client
+        from api.db import TursoClient
 
         log.info("Dispatcher çalışıyor (build=2026-11-18-d)")
         settings = get_settings()
-        db = D1Client(**settings.d1_config)
+        db = TursoClient(**settings.db_config)
         try:
             # Önce COUNT(*) + sonra SELECT = iki D1 isteğiydi. Satır sayısı
             # zaten elimizde; ikinci sorguyu kaldırdık.

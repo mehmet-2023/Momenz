@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""D1 şema migration'larını uygular (idempotent).
+"""Turso şema migration'larını uygular (idempotent).
 
     python scripts/migrate.py
 
-Ortam değişkenleri: MOMENZ_D1_ACCOUNT_ID / DATABASE_ID / API_TOKEN
+Ortam değişkenleri: MOMENZ_TURSO_DATABASE_URL / MOMENZ_TURSO_AUTH_TOKEN
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.config import get_settings
-from api.db import D1Client
+from api.db import TursoClient
 
 MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -38,9 +38,9 @@ def split_statements(sql: str) -> list[str]:
 
 def main() -> None:
     settings = get_settings()
-    if not settings.d1_ready():
-        raise SystemExit("D1 ayarları eksik. .env dosyasını kontrol et.")
-    db = D1Client(**settings.d1_config)
+    if not settings.db_ready():
+        raise SystemExit("Turso ayarları eksik. .env dosyasını kontrol et.")
+    db = TursoClient(**settings.db_config)
     db.execute(
         "CREATE TABLE IF NOT EXISTS momenz_migrations "
         "(name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
