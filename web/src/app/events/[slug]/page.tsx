@@ -67,11 +67,14 @@ export default function EventDetailPage() {
     void load();
   }, [load]);
 
-  // /events/new aynı Drive linkini yakalayıp buraya yönlendirdiyse bilgi ver.
+  // /events/new aynı Drive linkini yakalayıp buraya yönlendirdiyse hata göster.
   useEffect(() => {
-    if (window.sessionStorage.getItem("momenz:existing-event") === "1") {
+    const title = window.sessionStorage.getItem("momenz:existing-event");
+    if (title) {
       window.sessionStorage.removeItem("momenz:existing-event");
-      setNotice("Bu Drive klasörü zaten bir etkinliğe bağlı. Yeni etkinlik oluşturulmadı.");
+      setError(
+        `Bu Drive klasörü zaten “${title}” etkinliği olarak kayıtlı. Yeni etkinlik oluşturulmadı.`,
+      );
     }
   }, []);
 

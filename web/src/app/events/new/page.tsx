@@ -120,8 +120,10 @@ export default function NewEventPage() {
         existing = undefined;
       }
       if (existing) {
-        setError(`Bu Drive klasörü zaten “${existing.title}” etkinliği olarak ekli.`);
-        window.sessionStorage.setItem("momenz:existing-event", "1");
+        setError(
+          `Bu Drive klasörü zaten “${existing.title}” etkinliği olarak kayıtlı. Yeni etkinlik oluşturulmadı.`,
+        );
+        window.sessionStorage.setItem("momenz:existing-event", existing.title);
         router.push(`/events/${existing.slug}`);
         return;
       }
