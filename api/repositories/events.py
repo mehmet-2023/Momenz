@@ -11,6 +11,11 @@ _SELECT = """
     SELECT e.*,
            json_extract(d.meta, '$.folder_date') AS drive_uploaded_at,
            m.first_file_id AS first_file_id,
+           COALESCE(
+               NULLIF(e.cover_file_id, ''),
+               NULLIF(m.cover_file_id, ''),
+               m.first_file_id
+           ) AS resolved_cover_file_id,
            (SELECT COUNT(*) FROM event_attendees a WHERE a.event_id = e.id)
                AS attendee_count,
            (SELECT COUNT(*) FROM event_attendees a
@@ -44,7 +49,12 @@ def _date_label(value: str | None) -> str | None:
 
 def _to_out(row: dict, viewer_id: str = "") -> dict[str, Any]:
     folder_key = str(row.get("folder_key") or "")
-    cover_id = str(row.get("cover_file_id") or row.get("first_file_id") or "")
+    cover_id = str(
+        row.get("resolved_cover_file_id")
+        or row.get("cover_file_id")
+        or row.get("first_file_id")
+        or ""
+    )
     is_owner = bool(viewer_id and str(row.get("owner_id") or "") == viewer_id)
     date_value = row.get("drive_uploaded_at") or row.get("event_date")
     return {

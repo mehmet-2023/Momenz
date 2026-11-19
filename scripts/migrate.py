@@ -55,7 +55,7 @@ def main() -> None:
                     continue
                 raise SystemExit(f"{path.name}: {exc}\nSQL: {statement[:200]}")
         db.execute(
-            "INSERT INTO momenz_migrations (name) VALUES (?)", (path.name,)
+            "INSERT OR IGNORE INTO momenz_migrations (name) VALUES (?)", (path.name,)
         )
         print(f"✓ {path.name} uygulandı")
 

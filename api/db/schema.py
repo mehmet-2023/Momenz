@@ -158,6 +158,7 @@ _STATEMENTS: tuple[str, ...] = (
         no_face INTEGER NOT NULL DEFAULT 0,
         errors INTEGER NOT NULL DEFAULT 0,
         first_file_id TEXT,
+        cover_file_id TEXT,
         meta TEXT NOT NULL DEFAULT '{}',
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
@@ -171,6 +172,21 @@ _STATEMENTS: tuple[str, ...] = (
 )
 
 
+# Eski kurulumlarda eksik kalan sütunlar. CREATE TABLE IF NOT EXISTS mevcut
+# tabloyu değiştirmediği için bunlar ayrı ve hata toleranslı çalıştırılır.
+_COLUMN_STATEMENTS: tuple[str, ...] = (
+    "ALTER TABLE folder_matrices ADD COLUMN cover_file_id TEXT",
+)
+
+
 def ensure_schema(db: TursoClient) -> None:
     """Eksik tablo/index'leri idempotent olarak oluşturur; veriye dokunmaz."""
     db.batch([{"sql": statement} for statement in _STATEMENTS])
+    # CREATE TABLE IF NOT EXISTS eski tabloya yeni sütun eklemez. Bu ifadeler
+    # ayrı çalışır; sütun zaten varsa "duplicate column name" yok sayılır.
+    for statement in _COLUMN_STATEMENTS:
+        try:
+            db.execute(statement)
+        except Exception as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise

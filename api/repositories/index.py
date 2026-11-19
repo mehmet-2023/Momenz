@@ -16,6 +16,10 @@ from ..db import D1Client
 
 _QUANT = 127.0
 
+# Etkinlik kapağı için "toplu fotoğraf" eşiği: en az bu kadar yüzü olan
+# tamamlanmış bir kare tercih edilir.
+_MIN_COVER_FACES = 4
+
 # Sıkşturma bombası / bozuk BLOB savunması: bir satırdan çözülebilecek azami
 # veri boyutu. Gerçek en büyük klasör ~5 MB sıkıştırılmış, ~25 MB açılmış.
 _MAX_FILES_BYTES = 128 * 1024 * 1024
@@ -51,10 +55,15 @@ CREATE TABLE IF NOT EXISTS folder_matrices (
     no_face INTEGER NOT NULL DEFAULT 0,
     errors INTEGER NOT NULL DEFAULT 0,
     first_file_id TEXT,
+    cover_file_id TEXT,
     meta TEXT NOT NULL DEFAULT '{}',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 """
+
+# Eski tablolarda CREATE TABLE IF NOT EXISTS yeni sütunu eklemez; ALTER ayrı
+# çalışır ve sütun zaten varsa yok sayılır.
+_COVER_COLUMN_SQL = "ALTER TABLE folder_matrices ADD COLUMN cover_file_id TEXT"
 
 
 def ensure_folder_matrices(db: D1Client) -> None:
@@ -63,6 +72,11 @@ def ensure_folder_matrices(db: D1Client) -> None:
     if identity in _MATRIX_TABLE_READY:
         return
     db.execute(_MATRIX_TABLE_SQL)
+    try:
+        db.execute(_COVER_COLUMN_SQL)
+    except Exception as exc:
+        if "duplicate column name" not in str(exc).lower():
+            raise
     _MATRIX_TABLE_READY.add(identity)
 
 
@@ -134,6 +148,40 @@ def _dequantize(raw: bytes, count: int) -> np.ndarray:
     return q.reshape(count, EMBEDDING_SIZE).astype(np.float32) / _QUANT
 
 
+def _face_count(row: dict) -> int:
+    """Bir dosya kaydındaki yüz sayısı; çözülmüş listelerde de çalışır."""
+    faces = row.get("faces")
+    if isinstance(faces, list) and faces:
+        return len(faces)
+    try:
+        return max(0, int(row.get("face_count") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def select_cover_file_id(files: list[dict]) -> str:
+    """Kapak için en kalabalık (>=4 yüz) tamamlanmış fotoğrafı seç.
+
+    Toplu fotoğraf yoksa ilk dosyaya düşer; eski kapak davranışı korunur.
+    """
+    fallback = ""
+    best_id = ""
+    best_faces = 0
+    for row in files:
+        file_id = str(row.get("file_id") or "")
+        if not file_id:
+            continue
+        if not fallback:
+            fallback = file_id
+        if str(row.get("status") or "done") != "done":
+            continue
+        faces = _face_count(row)
+        if faces >= _MIN_COVER_FACES and faces > best_faces:
+            best_faces = faces
+            best_id = file_id
+    return best_id or fallback
+
+
 def _encode_files(files: list[dict]) -> bytes:
     """Embedding'siz kompakt dosya kayıtları: sadece meta + yüz sayısı."""
     compact = [
@@ -146,7 +194,7 @@ def _encode_files(files: list[dict]) -> bytes:
             "s": str(row.get("status") or "done"),
             "e": row.get("error"),
             "t": row.get("claimed_at"),
-            "c": len(row.get("faces") or []),
+            "c": _face_count(row),
         }
         for row in files
         if str(row.get("file_id") or "")
@@ -170,6 +218,14 @@ def _decode_files(
         if not isinstance(item, dict):
             continue
         file_id = str(item.get("i") or item.get("file_id") or "")
+        embedded_faces = item.get("faces")
+        if isinstance(embedded_faces, list):
+            face_count = len(embedded_faces)
+        else:
+            try:
+                face_count = max(0, int(item.get("c") or 0))
+            except (TypeError, ValueError):
+                face_count = 0
         record = {
             "file_id": file_id,
             "name": str(item.get("n") or item.get("name") or ""),
@@ -179,14 +235,15 @@ def _decode_files(
             "status": str(item.get("s") or item.get("status") or "done"),
             "error": item.get("e", item.get("error")),
             "faces": [],
+            "face_count": face_count,
         }
         if item.get("t") is not None:
             record["claimed_at"] = item["t"]
         if with_faces:
-            if isinstance(item.get("faces"), list):  # eski format: gömülü embedding
-                record["faces"] = item["faces"]
+            if isinstance(embedded_faces, list):  # eski format: gömülü embedding
+                record["faces"] = embedded_faces
             else:
-                count = max(0, int(item.get("c") or 0))
+                count = face_count
                 if matrix is not None and count:
                     block = matrix[offset : offset + count]
                     record["faces"] = [
@@ -287,6 +344,8 @@ def save_index_row(
     matrix = np.vstack(embeddings).astype(np.float32) if embeddings else np.empty(
         (0, EMBEDDING_SIZE), dtype=np.float32
     )
+    # Kapak: en az 4 yüzlü (toplu) fotoğraf; yoksa ilk dosya.
+    cover_file_id = select_cover_file_id(records) or first_file_id
     # Satır ilk kez oluşturuluyorsa yayın bayrağını events'ten al; sonraki
     # yazımlarda set_matrix_public() tarafından güncellenen değeri koru.
     is_public = folder_is_public(db, folder_key)
@@ -294,8 +353,8 @@ def save_index_row(
         """
         INSERT INTO folder_matrices
             (folder_key, version, is_public, matrix, metas, rows, files, images,
-             done, no_face, errors, first_file_id, meta, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+             done, no_face, errors, first_file_id, cover_file_id, meta, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT (folder_key) DO UPDATE SET
             version = excluded.version,
             matrix = excluded.matrix,
@@ -307,6 +366,7 @@ def save_index_row(
             no_face = excluded.no_face,
             errors = excluded.errors,
             first_file_id = excluded.first_file_id,
+            cover_file_id = excluded.cover_file_id,
             meta = excluded.meta,
             updated_at = CURRENT_TIMESTAMP
         """,
@@ -323,6 +383,7 @@ def save_index_row(
             counts["no_face"],
             counts["error"],
             first_file_id,
+            cover_file_id,
             json.dumps(meta or {}, ensure_ascii=False, separators=(",", ":")),
         ),
     )
