@@ -155,6 +155,20 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     };
   }, [results]);
 
+  useEffect(() => {
+    // Görseller hazırlanırken popup açıkken arka planın kaymasını engelle.
+    const blocking =
+      results !== null &&
+      (results.results?.length ?? 0) > 0 &&
+      preloadedFor !== results;
+    if (!blocking) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [results, preloadedFor]);
+
   function pick(next: File | null) {
     if (!next) return;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -258,6 +272,10 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
   }
 
   const allResults = results?.results ?? [];
+  const imagePercent =
+    imageProgress.total > 0
+      ? Math.min(100, Math.round((imageProgress.loaded / imageProgress.total) * 100))
+      : null;
 
   return (
     <section className="face-stage" id="kendini-bul">
@@ -387,10 +405,36 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
       {results === null ? null : allResults.length === 0 ? (
         <div className="face-empty">Bu etkinlikte yüzünle eşleşen fotoğraf bulunamadı.</div>
       ) : preloadedFor !== results ? (
-        <div className="results-loading" role="status" aria-live="polite">
-          {imageProgress.total > 0
-            ? `GÖRSELLER HAZIRLANIYOR · ${imageProgress.loaded}/${imageProgress.total}`
-            : "SONUÇLAR HAZIRLANIYOR"}
+        <div
+          className={`results-modal${imagePercent === null ? " is-indeterminate" : ""}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="results-modal-title"
+          aria-live="polite"
+        >
+          <div className="results-modal-card">
+            <div className="results-modal-eyebrow">ARAMA TAMAMLANDI</div>
+            <div className="results-modal-title" id="results-modal-title">
+              GÖRSELLER HAZIRLANIYOR
+            </div>
+            <div
+              className="results-modal-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={imagePercent ?? undefined}
+            >
+              <span style={imagePercent === null ? undefined : { width: `${imagePercent}%` }} />
+            </div>
+            <div className="results-modal-row">
+              <span>
+                {imageProgress.total > 0
+                  ? `${imageProgress.loaded} / ${imageProgress.total} GÖRSEL`
+                  : "SONUÇLAR HAZIRLANIYOR"}
+              </span>
+              <span>{imagePercent === null ? "..." : `%${imagePercent}`}</span>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="face-results">
