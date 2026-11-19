@@ -10,7 +10,7 @@ import {
   createEvent,
   ensureCsrf,
   getJob,
-  getMyEvents,
+  listEvents,
   listFolders,
 } from "@/lib/api";
 import type { Event, Job } from "@/lib/types";
@@ -129,13 +129,21 @@ export default function NewEventPage() {
       // normal oluşturma akışına devam et.
       let existing: Event | undefined;
       try {
-        const mine = await getMyEvents();
-        // Birincil yol: klasör anahtarını linkten üretip doğrudan etkinlikleri tara.
-        // (Klasör başka hesaba ait olsa bile etkinlik sahibi bu listededir.)
+        // TÜM public etkinlikleri tara: klasör daha önce başka bir hesap
+        // tarafından eklenmiş olabilir, yine de "zaten kayıtlı" sayılır.
+        const first = await listEvents({ limit: 100 });
+        const events = [...first.items];
+        while (events.length < first.total) {
+          const next = await listEvents({ limit: 100, offset: events.length });
+          if (!next.items.length) break;
+          events.push(...next.items);
+        }
+
         const key = await folderKeyFor(clean);
         existing = key
-          ? mine.items.find((item) => item.folder_key === key)
+          ? events.find((item) => item.folder_key === key)
           : undefined;
+
         // Eski tarayıcılarda SHA-1 yoksa klasör listesiyle karşılaştır.
         if (!existing) {
           const folders = await listFolders();
@@ -146,7 +154,7 @@ export default function NewEventPage() {
               (!!item.url && driveMeta(item.url).id === id),
           );
           existing = folder
-            ? mine.items.find((item) => item.folder_key === folder.key)
+            ? events.find((item) => item.folder_key === folder.key)
             : undefined;
         }
       } catch {
