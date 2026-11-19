@@ -20,8 +20,7 @@ RUN pip install -r requirements-api.txt
 
 COPY core/ ./core/
 COPY api/ ./api/
-COPY migrations/ ./migrations/
-COPY scripts/ ./scripts/
+# scripts/ ve migrations/ üretim imajına alınmaz (.dockerignore).
 
 # Root olarak çalışmaz.
 RUN useradd --create-home --shell /bin/bash appuser \

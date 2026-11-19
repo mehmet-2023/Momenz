@@ -75,25 +75,9 @@ class TursoStore(D1Store):
             self._batch([{"sql": statement} for statement in statements])
             self._schema_ready = True
 
+    # drive_face_index artık yok: klasörün tam index'i folder_matrices tek
+    # satırında. Eski çok satırlı tabloyu CREATE IF NOT EXISTS ile geri getirme.
     _SCHEMA_SQL = """
-        CREATE TABLE IF NOT EXISTS drive_face_index (
-            folder_key TEXT NOT NULL,
-            file_id TEXT NOT NULL,
-            name TEXT,
-            path TEXT,
-            width INTEGER NOT NULL DEFAULT 0,
-            height INTEGER NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'done',
-            error TEXT,
-            faces TEXT NOT NULL DEFAULT '[]',
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            claimed_at TEXT,
-            PRIMARY KEY (folder_key, file_id)
-        );
-        CREATE INDEX IF NOT EXISTS drive_face_index_folder_key_idx
-        ON drive_face_index (folder_key);
-        CREATE INDEX IF NOT EXISTS drive_face_index_file_id_idx
-        ON drive_face_index (file_id);
         CREATE TABLE IF NOT EXISTS drive_folders (
             folder_key TEXT PRIMARY KEY,
             meta TEXT NOT NULL DEFAULT '{}',

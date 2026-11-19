@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import zlib
 from typing import Any
 
 import numpy as np
@@ -11,11 +12,20 @@ from core.mem import release_memory
 
 from ..db import D1Client
 
-# Bu yol artık yalnızca iş bitiminde/backfill'de kullanılıyor (arama tek BLOB
-# satırı okur). Turso'da 4000 satırlık sayfa, HTTP tur sayısını azaltır.
-_PAGE_SIZE = 4000
+_QUANT = 127.0
+
+# Sıkşturma bombası / bozuk BLOB savunması: bir satırdan çözülebilecek azami
+# veri boyutu. Gerçek en büyük klasör ~5 MB sıkıştırılmış, ~25 MB açılmış.
+_MAX_FILES_BYTES = 128 * 1024 * 1024
+_MAX_METAS_BYTES = 64 * 1024 * 1024
+_MAX_META_BYTES = 1024 * 1024
+_MAX_EMB_BYTES = 1024  # 128 float32 -> 512 byte -> 684 base64 karakter
 
 _MATRIX_TABLE_READY: set[int] = set()
+
+
+class IndexDataError(ValueError):
+    """Index BLOB'u bozuk, sınır aşımı veya kötü niyetli."""
 
 _MATRIX_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS folder_matrices (
@@ -25,6 +35,13 @@ CREATE TABLE IF NOT EXISTS folder_matrices (
     matrix BLOB NOT NULL,
     metas BLOB NOT NULL,
     rows INTEGER NOT NULL DEFAULT 0,
+    files BLOB,
+    images INTEGER NOT NULL DEFAULT 0,
+    done INTEGER NOT NULL DEFAULT 0,
+    no_face INTEGER NOT NULL DEFAULT 0,
+    errors INTEGER NOT NULL DEFAULT 0,
+    first_file_id TEXT,
+    meta TEXT NOT NULL DEFAULT '{}',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 """
@@ -37,6 +54,268 @@ def ensure_folder_matrices(db: D1Client) -> None:
         return
     db.execute(_MATRIX_TABLE_SQL)
     _MATRIX_TABLE_READY.add(identity)
+
+
+# ---------------------------------------------------------------------------
+# Sıkıştırılmış tek satır formatı
+#
+# matrix : int8 nicemlenmiş float32 vektörler (4x küçük), satır başına 128 byte
+# metas  : zlib + kompakt JSON (arama için dosya başına tek meta)
+# files  : zlib + kompakt JSON; embedding YOK, yalnızca dosya meta + yüz sayısı
+#          (embedding'ler matrix'te tek kopya; eski format 105 MB'dı)
+# Eski (float32 matrix / sıkıştırılmamış JSON) satırlar otomatik tanınır.
+# ---------------------------------------------------------------------------
+
+
+def _maybe_decompress(raw: Any, limit: int) -> bytes:
+    if isinstance(raw, memoryview):
+        raw = raw.tobytes()
+    if isinstance(raw, (bytes, bytearray)):
+        value = bytes(raw)
+    else:
+        return b""
+    if not value:
+        return b""
+    if len(value) > limit:
+        raise IndexDataError("Index alanı boyut sınırını aştı.")
+    if value[:1] != b"\x78":  # zlib başlığı yok: eski sıkıştırılmamış JSON
+        if len(value) > limit:
+            raise IndexDataError("Index alanı boyut sınırını aştı.")
+        return value
+    decompressor = zlib.decompressobj()
+    try:
+        payload = decompressor.decompress(value, limit + 1)
+    except zlib.error as exc:
+        raise IndexDataError("Bozuk zlib verisi.") from exc
+    if len(payload) > limit or not decompressor.eof:
+        raise IndexDataError("Sıkıştırılmış index boyut sınırını aştı.")
+    return payload
+
+
+def _encode_json(value: Any) -> bytes:
+    payload = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return zlib.compress(payload, 6)
+
+
+def _decode_json(raw: Any, limit: int = _MAX_METAS_BYTES) -> Any:
+    payload = _maybe_decompress(raw, limit)
+    if not payload:
+        return None
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+
+def _quantize(matrix: np.ndarray) -> bytes:
+    values = np.clip(np.round(matrix * _QUANT), -127, 127).astype(np.int8)
+    return values.tobytes()
+
+
+def _dequantize(raw: bytes, count: int) -> np.ndarray:
+    size = count * EMBEDDING_SIZE
+    if len(raw) == size * 4:  # eski float32 format
+        return np.frombuffer(raw, dtype=np.float32).reshape(count, EMBEDDING_SIZE)
+    q = np.frombuffer(raw[:size], dtype=np.int8)
+    if q.size != size:
+        raise ValueError("Matris BLOB boyutu satır sayısıyla uyuşmuyor.")
+    return q.reshape(count, EMBEDDING_SIZE).astype(np.float32) / _QUANT
+
+
+def _encode_files(files: list[dict]) -> bytes:
+    """Embedding'siz kompakt dosya kayıtları: sadece meta + yüz sayısı."""
+    compact = [
+        {
+            "i": str(row.get("file_id") or ""),
+            "n": str(row.get("name") or ""),
+            "p": str(row.get("path") or ""),
+            "w": int(row.get("width") or 0),
+            "h": int(row.get("height") or 0),
+            "s": str(row.get("status") or "done"),
+            "e": row.get("error"),
+            "t": row.get("claimed_at"),
+            "c": len(row.get("faces") or []),
+        }
+        for row in files
+        if str(row.get("file_id") or "")
+    ]
+    return _encode_json(compact)
+
+
+def _decode_files(
+    raw: Any,
+    matrix: np.ndarray | None = None,
+    *,
+    with_faces: bool = True,
+    limit: int = _MAX_FILES_BYTES,
+) -> list[dict]:
+    items = _decode_json(raw, limit)
+    if not isinstance(items, list):
+        return []
+    output: list[dict] = []
+    offset = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        file_id = str(item.get("i") or item.get("file_id") or "")
+        record = {
+            "file_id": file_id,
+            "name": str(item.get("n") or item.get("name") or ""),
+            "path": str(item.get("p") or item.get("path") or ""),
+            "width": int(item.get("w") or item.get("width") or 0),
+            "height": int(item.get("h") or item.get("height") or 0),
+            "status": str(item.get("s") or item.get("status") or "done"),
+            "error": item.get("e", item.get("error")),
+            "faces": [],
+        }
+        if item.get("t") is not None:
+            record["claimed_at"] = item["t"]
+        if with_faces:
+            if isinstance(item.get("faces"), list):  # eski format: gömülü embedding
+                record["faces"] = item["faces"]
+            else:
+                count = max(0, int(item.get("c") or 0))
+                if matrix is not None and count:
+                    block = matrix[offset : offset + count]
+                    record["faces"] = [
+                        {
+                            "emb": base64.b64encode(
+                                np.ascontiguousarray(vector, dtype=np.float32).tobytes()
+                            ).decode("ascii")
+                        }
+                        for vector in block
+                    ]
+                offset += count
+        output.append(record)
+    return output
+
+
+def load_index_row(
+    db: D1Client, folder_key: str
+) -> tuple[int, list[dict], dict] | None:
+    """Tam index satırını TEK okumayla döndürür: (sürüm, dosyalar, meta).
+
+    Dönen dosya kayıtlarındaki yüz vektörleri matristen yeniden kurulur;
+    worker bellekten patchleyip aynı satırı TEK yazımda geri yazar.
+    """
+    row = db.query_one(
+        """
+        SELECT version, matrix, metas, rows, files, meta
+        FROM folder_matrices WHERE folder_key = ? LIMIT 1
+        """,
+        (folder_key,),
+    )
+    if not row or row.get("files") is None:
+        return None
+    try:
+        matrix = _dequantize(bytes(row.get("matrix") or b""), int(row.get("rows") or 0))
+        files = _decode_files(row["files"], matrix)
+        meta = _decode_json(row.get("meta"), _MAX_META_BYTES) or {}
+    except IndexDataError:
+        # Bozuk/şişirilmiş satırı asla geri yazmayacak şekilde yok say.
+        return None
+    except ValueError:
+        return None
+    if not isinstance(meta, dict):
+        meta = {}
+    return int(row.get("version") or 0), files, meta
+
+
+def save_index_row(
+    db: D1Client,
+    folder_key: str,
+    version: int,
+    files: list[dict],
+    meta: dict | None = None,
+) -> None:
+    """Klasörün tam index'ini + türetilmiş matrisi TEK satır olarak yazar.
+
+    Embedding'ler yalnızca ``matrix`` alanında int8 olarak tutulur; ``files``
+    alanında yinelenmez. Matris ve metas bu dosyalardan türetilir; arama aynı
+    satırdan okumaya devam eder. ``is_public`` UPDATE'de güncellenmez.
+    """
+    ensure_folder_matrices(db)
+    records = [dict(item) for item in files if str(item.get("file_id") or "")]
+
+    embeddings: list[np.ndarray] = []
+    metas: list[dict] = []
+    counts = {"done": 0, "no_face": 0, "error": 0}
+    first_file_id = ""
+    for record in records:
+        file_id = str(record.get("file_id") or "")
+        status = str(record.get("status") or "done")
+        if status in counts:
+            counts[status] += 1
+        if not first_file_id:
+            first_file_id = file_id
+        if status != "done":
+            continue
+        for face in record.get("faces") or []:
+            try:
+                encoded = str(face.get("emb") or "")
+                if len(encoded) > _MAX_EMB_BYTES:
+                    continue
+                raw = base64.b64decode(encoded)
+                embedding = np.frombuffer(raw, dtype=np.float32)
+            except Exception:
+                continue
+            if embedding.size != EMBEDDING_SIZE:
+                continue
+            embeddings.append(embedding.copy())
+            metas.append(
+                {
+                    "file_id": file_id,
+                    "name": str(record.get("name") or ""),
+                    "path": str(record.get("path") or ""),
+                    "width": int(record.get("width") or 0),
+                    "height": int(record.get("height") or 0),
+                }
+            )
+
+    matrix = np.vstack(embeddings).astype(np.float32) if embeddings else np.empty(
+        (0, EMBEDDING_SIZE), dtype=np.float32
+    )
+    # Satır ilk kez oluşturuluyorsa yayın bayrağını events'ten al; sonraki
+    # yazımlarda set_matrix_public() tarafından güncellenen değeri koru.
+    is_public = folder_is_public(db, folder_key)
+    db.execute(
+        """
+        INSERT INTO folder_matrices
+            (folder_key, version, is_public, matrix, metas, rows, files, images,
+             done, no_face, errors, first_file_id, meta, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (folder_key) DO UPDATE SET
+            version = excluded.version,
+            matrix = excluded.matrix,
+            metas = excluded.metas,
+            rows = excluded.rows,
+            files = excluded.files,
+            images = excluded.images,
+            done = excluded.done,
+            no_face = excluded.no_face,
+            errors = excluded.errors,
+            first_file_id = excluded.first_file_id,
+            meta = excluded.meta,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            folder_key,
+            int(version),
+            1 if is_public else 0,
+            _quantize(matrix),
+            _encode_json(metas),
+            int(matrix.shape[0]),
+            _encode_files(records),
+            len(records),
+            counts["done"],
+            counts["no_face"],
+            counts["error"],
+            first_file_id,
+            json.dumps(meta or {}, ensure_ascii=False, separators=(",", ":")),
+        ),
+    )
 
 
 def folder_is_public(db: D1Client, folder_key: str) -> bool:
@@ -65,7 +344,7 @@ def save_matrix(
     *,
     is_public: bool | None = None,
 ) -> None:
-    """Klasörün aranabilir matrisini tek satır olarak yazar."""
+    """Eski uyumluluk yazımı: sıkıştırılmış tek satır formatına yazar."""
     ensure_folder_matrices(db)
     if is_public is None:
         is_public = folder_is_public(db, folder_key)
@@ -74,16 +353,11 @@ def save_matrix(
         raise ValueError("Matris boyutu EMBEDDING_SIZE ile uyuşmuyor.")
     if array.shape[0] != len(metas):
         raise ValueError("Matris satır sayısı metadata sayısı ile uyuşmuyor.")
-
-    matrix_blob = array.tobytes()
-    metas_blob = json.dumps(
-        metas, ensure_ascii=False, separators=(",", ":")
-    ).encode("utf-8")
     db.execute(
         """
         INSERT INTO folder_matrices
-            (folder_key, version, is_public, matrix, metas, rows, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            (folder_key, version, is_public, matrix, metas, rows, files, images)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (folder_key) DO UPDATE SET
             version = excluded.version,
             is_public = excluded.is_public,
@@ -96,8 +370,10 @@ def save_matrix(
             folder_key,
             int(version),
             1 if is_public else 0,
-            matrix_blob,
-            metas_blob,
+            _quantize(array),
+            _encode_json(metas),
+            int(array.shape[0]),
+            _encode_json([]),
             int(array.shape[0]),
         ),
     )
@@ -106,42 +382,21 @@ def save_matrix(
 def _decode_matrix_row(row: dict) -> tuple[np.ndarray, list[dict]] | None:
     try:
         count = int(row.get("rows") or 0)
-        raw_matrix = row.get("matrix")
-        if isinstance(raw_matrix, memoryview):
-            raw_matrix = raw_matrix.tobytes()
-        if not isinstance(raw_matrix, (bytes, bytearray)):
-            return None
-        array = np.frombuffer(bytes(raw_matrix), dtype=np.float32)
-        if array.size != count * EMBEDDING_SIZE:
-            return None
-        matrix = array.reshape(count, EMBEDDING_SIZE).copy()
-
-        raw_metas = row.get("metas")
-        if isinstance(raw_metas, memoryview):
-            raw_metas = raw_metas.tobytes()
-        if isinstance(raw_metas, (bytes, bytearray)):
-            raw_metas = bytes(raw_metas).decode("utf-8")
-        metas = json.loads(str(raw_metas or "[]"))
+        matrix = _dequantize(bytes(row.get("matrix") or b""), count)
+        metas = _decode_json(row.get("metas"))
         if not isinstance(metas, list) or len(metas) != count:
             return None
         return matrix, metas
-    except (TypeError, ValueError, UnicodeDecodeError):
+    except (TypeError, ValueError, zlib.error):
         return None
 
 
 def load_matrix(
     db: D1Client, folder_key: str, version: int | None
 ) -> tuple[np.ndarray, list[dict]] | None:
-    """Sürüm eşleşirse matrisi tek satırdan okur, aksi halde ``None``.
-
-    ``version=None`` güncel sürümü dikkate almadan mevcut BLOB'u okur; worker
-    incremental güncellemede bunu kullanır.
-    """
+    """Sürüm eşleşirse matrisi tek satırdan okur, aksi halde ``None``."""
     row = db.query_one(
-        """
-        SELECT version, matrix, metas, rows
-        FROM folder_matrices WHERE folder_key = ? LIMIT 1
-        """,
+        "SELECT version, matrix, metas, rows FROM folder_matrices WHERE folder_key = ? LIMIT 1",
         (folder_key,),
     )
     if not row:
@@ -152,19 +407,29 @@ def load_matrix(
 
 
 def public_version_matrix(
-    db: D1Client, folder_key: str
+    db: D1Client, folder_key: str, owner_id: str | None = None
 ) -> tuple[bool, int, tuple[np.ndarray, list[dict]] | None]:
-    """Arama için gereken her şeyi TEK satır okumayla döndürür.
+    """Arama için gereken her şeyi TEKE okumayla döndürür.
 
-    Yayın durumu, index sürümü ve (sürüm güncelse) matris BLOB'u aynı sorguda
-    gelir. Böylece arama başına Turso satır okuması 1'dir.
+    Yetkisiz kullanıcıya matris BLOB'u hiç indirilmez: izin kontrolü SQL'in
+    içinde yapılır. Böylece kötü niyetli biri özel bir klasörün folder_key'ini
+    bilse bile 5 MB'lık matrisi sunucuya çektiremez.
     """
+    viewer = str(owner_id or "")
+    allowed = """(
+        m.is_public = 1 OR EXISTS(
+            SELECT 1 FROM drive_folders d
+            WHERE d.folder_key = m.folder_key AND d.owner_id = ?
+        )
+    )"""
     row = db.query_one(
-        """
-        SELECT is_public, version, matrix, metas, rows
-        FROM folder_matrices WHERE folder_key = ? LIMIT 1
+        f"""
+        SELECT m.is_public, m.version, m.rows,
+               CASE WHEN {allowed} THEN m.matrix END AS matrix,
+               CASE WHEN {allowed} THEN m.metas END AS metas
+        FROM folder_matrices m WHERE m.folder_key = ? LIMIT 1
         """,
-        (folder_key,),
+        (viewer, viewer, folder_key),
     ) or {}
     version = int(row.get("version") or 0)
     matrix_data = None
@@ -189,15 +454,16 @@ def _rows_to_embeddings(
                 faces = []
         for face in faces or []:
             try:
-                raw = base64.b64decode(str(face.get("emb") or ""))
+                encoded = str(face.get("emb") or "")
+                if len(encoded) > _MAX_EMB_BYTES:
+                    continue
+                raw = base64.b64decode(encoded)
                 embedding = np.frombuffer(raw, dtype=np.float32)
             except Exception:
                 continue
             if embedding.size != EMBEDDING_SIZE:
                 continue
             embeddings.append(embedding.copy())
-            # Arama çıktısında yalnızca bu alanlar kullanılıyor; bbox ve
-            # det_score saklamak 31k kayıtta extra ~8 MB harcıyordu.
             metas.append(
                 {
                     "file_id": str(row.get("file_id") or ""),
@@ -210,9 +476,7 @@ def _rows_to_embeddings(
     return embeddings, metas
 
 
-def _stack(
-    embeddings: list[np.ndarray],
-) -> np.ndarray:
+def _stack(embeddings: list[np.ndarray]) -> np.ndarray:
     if not embeddings:
         return np.empty((0, EMBEDDING_SIZE), dtype=np.float32)
     matrix = np.vstack(embeddings).astype(np.float32, copy=False)
@@ -220,154 +484,74 @@ def _stack(
     return matrix
 
 
+def folder_files(db: D1Client, folder_key: str) -> list[dict]:
+    """Klasörün dosya meta'larını TEK satırdan okur (yüz vektörü ÇEKMEZ)."""
+    row = db.query_one(
+        "SELECT files FROM folder_matrices WHERE folder_key = ? LIMIT 1",
+        (folder_key,),
+    )
+    return _decode_files((row or {}).get("files"), with_faces=False)
+
+
 def fetch_matrix(db: D1Client, folder_key: str) -> tuple[np.ndarray, list[dict]]:
-    """Tüm klasörü tarar. Yalnızca ilk matris oluşturulurken kullanılır."""
-    embeddings: list[np.ndarray] = []
-    metas: list[dict] = []
-    last_id = ""
-    release_pages = 0
-
-    while True:
-        rows = db.query(
-            """
-            SELECT file_id, name, path, width, height, status, faces
-            FROM drive_face_index
-            WHERE folder_key = ? AND file_id > ?
-            ORDER BY file_id
-            LIMIT ?
-            """,
-            (folder_key, last_id, _PAGE_SIZE),
-        )
-        if not rows:
-            break
-        page_embeddings, page_metas = _rows_to_embeddings(rows)
-        embeddings.extend(page_embeddings)
-        metas.extend(page_metas)
-
-        last_id = str(rows[-1].get("file_id") or "")
-        more = len(rows) >= _PAGE_SIZE and bool(last_id)
-        del rows
-        if release_pages % 4 == 0:
-            release_memory()
-        release_pages += 1
-        if not more:
-            break
-
-    matrix = _stack(embeddings)
+    """Arama matrisini doğrudan tek satırdan okur (fallback)."""
+    loaded = load_matrix(db, folder_key, None)
+    if loaded is not None:
+        return loaded
     release_memory()
-    return matrix, metas
+    return np.empty((0, EMBEDDING_SIZE), dtype=np.float32), []
 
 
 def update_matrix_from_changes(
     db: D1Client,
     folder_key: str,
     version: int,
-    changed_file_ids: set[str] | list[str],
+    changed_file_ids: set[str] | list[str] | None = None,
 ) -> None:
-    """Incremental index bitiminde matrisi en az satır okumasıyla günceller.
-
-    Mevcut matris BLOB'u (1 satır) okunur; yalnızca değişen dosyaların yüz
-    satırları sorgulanır. Matris yoksa (ilk index/reindex) tam taramaya düşer.
-    Yazma her zaman tek satırdır.
-    """
-    changed = {str(value) for value in changed_file_ids if value}
-    loaded = load_matrix(db, folder_key, None)
-
-    if loaded is None or not changed:
-        if loaded is None:
-            matrix, metas = fetch_matrix(db, folder_key)
-        else:
-            matrix, metas = loaded
-        save_matrix(db, folder_key, version, matrix, metas)
+    """Uyumluluk sarmalayıcısı: mevcut tek satırı yeni sürümle yeniden yazar."""
+    loaded = load_index_row(db, folder_key)
+    if loaded is None:
         return
-
-    old_matrix, old_metas = loaded
-    remove = {
-        index
-        for index, meta in enumerate(old_metas)
-        if str(meta.get("file_id") or "") in changed
-    }
-    keep_matrix = np.delete(old_matrix, list(remove), axis=0) if remove else old_matrix
-    keep_metas = [meta for index, meta in enumerate(old_metas) if index not in remove]
-
-    new_embeddings: list[np.ndarray] = []
-    new_metas: list[dict] = []
-    values = sorted(changed)
-    for start in range(0, len(values), 80):
-        chunk = values[start : start + 80]
-        placeholders = ",".join("?" for _ in chunk)
-        rows = db.query(
-            f"""
-            SELECT file_id, name, path, width, height, status, faces
-            FROM drive_face_index
-            WHERE folder_key = ? AND file_id IN ({placeholders})
-            """,
-            [folder_key, *chunk],
-        )
-        page_embeddings, page_metas = _rows_to_embeddings(rows)
-        new_embeddings.extend(page_embeddings)
-        new_metas.extend(page_metas)
-
-    if new_embeddings:
-        matrix = np.vstack([keep_matrix, _stack(new_embeddings)]).astype(
-            np.float32, copy=False
-        )
-    else:
-        matrix = keep_matrix
-    save_matrix(db, folder_key, version, matrix, keep_metas + new_metas)
+    _, files, meta = loaded
+    save_index_row(db, folder_key, version, files, meta)
 
 
 def public_and_version(db: D1Client, folder_key: str) -> tuple[bool, int]:
-    """Tek D1 isteğinde yayın durumu + index versiyonu.
-
-    Arama yolunda ayrı ayrı ``is_public_folder`` ve ``get_version``
-    çağrıları iki HTTP isteği ve iki ayrı satır okumasıydı. Scalar subquery
-    ikisini tek yanıtta birleştirir.
-    """
+    """Yayın durumu + sürümü tek satırdan okur."""
     row = db.query_one(
-        """
-        SELECT
-            EXISTS(SELECT 1 FROM events
-                   WHERE folder_key = ? AND is_public = 1) AS is_public,
-            (SELECT version FROM folder_index_versions
-             WHERE folder_key = ? LIMIT 1) AS version
-        """,
-        (folder_key, folder_key),
+        "SELECT is_public, version FROM folder_matrices WHERE folder_key = ? LIMIT 1",
+        (folder_key,),
     ) or {}
     return bool(row.get("is_public")), int(row.get("version") or 0)
 
 
-def stats(db: D1Client, folder_key: str) -> dict[str, int]:
+def index_stats(db: D1Client, folder_key: str) -> dict[str, int]:
+    """Klasör istatistiklerini tek satırdan okur (tam tarama yok)."""
     row = db.query_one(
-        """
-        SELECT
-            COUNT(*) AS images,
-            COALESCE(SUM(json_array_length(faces)), 0) AS faces
-        FROM drive_face_index
-        WHERE folder_key = ?
-        """,
+        "SELECT images, done, no_face, errors, rows FROM folder_matrices WHERE folder_key = ? LIMIT 1",
         (folder_key,),
-    )
+    ) or {}
     return {
-        "images": int((row or {}).get("images") or 0),
-        "faces": int((row or {}).get("faces") or 0),
+        "images": int(row.get("images") or 0),
+        "done": int(row.get("done") or 0),
+        "no_face": int(row.get("no_face") or 0),
+        "errors": int(row.get("errors") or 0),
+        "faces": int(row.get("rows") or 0),
     }
 
 
+def stats(db: D1Client, folder_key: str) -> dict[str, int]:
+    data = index_stats(db, folder_key)
+    return {"images": data["images"], "faces": data["faces"]}
+
+
 def file_ids(db: D1Client, folder_key: str, values: list[str]) -> list[str]:
-    """Klasöre ait olduğu doğrulanmış dosya id'leri."""
+    """Klasöre ait olduğu doğrulanmış dosya id'leri (tek satırdan)."""
     if not values:
         return []
-    found: list[str] = []
-    for start in range(0, len(values), 80):
-        chunk = [str(v) for v in values[start : start + 80]]
-        placeholders = ",".join("?" for _ in chunk)
-        rows = db.query(
-            f"""
-            SELECT DISTINCT file_id FROM drive_face_index
-            WHERE folder_key = ? AND file_id IN ({placeholders})
-            """,
-            [folder_key, *chunk],
-        )
-        found.extend(str(row["file_id"]) for row in rows if row.get("file_id"))
-    return found
+    wanted = {str(value) for value in values if value}
+    return [
+        str(row.get("file_id") or "")
+        for row in folder_files(db, folder_key)
+        if str(row.get("file_id") or "") in wanted
+    ]

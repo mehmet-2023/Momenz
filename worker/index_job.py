@@ -18,8 +18,6 @@ log = logging.getLogger("momenz.worker")
 
 def run_job(settings: Any, job: dict) -> dict[str, Any]:
     from api.db import TursoClient
-    from api.repositories import folders as folder_repo
-    from api.repositories import index as index_repo
     from api.repositories import jobs as job_repo
     from api.services.drive import get_drive_client
     from core.config import (
@@ -28,8 +26,8 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         DEFAULT_MIN_FACE,
         DEFAULT_THUMB_SIZE,
     )
-    from core.turso_store import TursoStore
     from core.face_engine import FaceEnginePool, ensure_models
+    from core.one_row_store import OneRowStore
     from core.pg_index_store import PgIndexStore
     from core.pipeline import IndexOptions, build_index
 
@@ -48,7 +46,10 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         cpu = max(1, min(8, os.cpu_count() or 4))
         yunet, sface = ensure_models()
         engine = FaceEnginePool(yunet, sface, size=cpu, num_threads=1)
-        store = PgIndexStore(TursoStore(settings.db_config), folder_key)
+        # Klasörün tam face index'i TEK satırda: PgIndexStore okuma/yazmalarını
+        # bellekteki sözlüğe yapar; job sonunda OneRowStore.persist() ile 1 yazma.
+        one_row = OneRowStore(db, folder_key)
+        store = PgIndexStore(one_row, folder_key)
         client = get_drive_client(settings)
 
         last_write = {"done": -1}
@@ -91,13 +92,8 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         total_found = int(summary.get("total_found") or 0)
         if total_found:
             store.set_meta("folder_count", str(total_found))
-        version = folder_repo.bump_version(db, folder_key)
-        # Arama yolundaki pahalı tam taramayı kaldıran tek satırlık matris.
-        # Artımlı index'te yalnızca değişen dosyaların satırları okunur;
-        # ilk index/reindex'te mevcut matris yoksa bir kez tam tarama yapılır.
-        index_repo.update_matrix_from_changes(
-            db, folder_key, version, store.changed_file_ids()
-        )
+        # Sürüm artışı ve tüm index/matris/metadata yazımı TEK SQL satırında.
+        version = one_row.persist()
 
         counters = summary.get("counters") or {}
         result = {

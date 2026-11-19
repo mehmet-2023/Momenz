@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import threading
+import time
+from collections import deque
 
 import numpy as np
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
@@ -14,7 +16,7 @@ from core.mem import release_memory
 from ..config import Settings, get_settings
 from ..db import D1Client
 from ..deps import get_db, optional_user
-from ..errors import AppError, Forbidden, UpstreamError
+from ..errors import AppError, Forbidden, RateLimited, UpstreamError
 from ..repositories import folders as folder_repo
 from ..repositories import index as index_repo
 from ..schemas import EmbedOut, SearchOut, SearchResultOut
@@ -27,6 +29,37 @@ router = APIRouter(prefix="/search", tags=["search"])
 # olur. Tek semaphore hem embed hem search yolunu serileştirir: yüz motoru
 # tek örnek, matris de klasör başına tek kopya.
 _heavy_lock = threading.BoundedSemaphore(1)
+
+
+class _RateLimiter:
+    """Basit sürekli pencere: IP başına ağır istek sayısını sınırlar."""
+
+    def __init__(self, limit: int, window: float) -> None:
+        self.limit = limit
+        self.window = window
+        self._hits: dict[str, deque[float]] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> None:
+        now = time.monotonic()
+        with self._lock:
+            hits = self._hits.setdefault(key, deque())
+            while hits and now - hits[0] > self.window:
+                hits.popleft()
+            if len(hits) >= self.limit:
+                raise RateLimited()
+            hits.append(now)
+            if len(self._hits) > 2000:
+                for name in [name for name, value in self._hits.items() if not value]:
+                    del self._hits[name]
+
+
+_search_limiter = _RateLimiter(30, 60.0)
+_embed_limiter = _RateLimiter(20, 60.0)
+
+
+def _client_ip(request: Request) -> str:
+    return str(request.client.host) if request.client else "unknown"
 
 
 def _search_service(request: Request) -> SearchService:
@@ -58,6 +91,8 @@ def _parse_embedding(raw: str | None) -> np.ndarray | None:
     D1 verisi açığa çıkmaz.
     """
     if not raw:
+        return None
+    if len(raw) > 8192:  # 128 float32 için ~2-3 KB yeterli
         return None
     try:
         values = json.loads(raw)
@@ -111,13 +146,14 @@ def _search(
 
 
 @router.post("/embed", response_model=EmbedOut)
-async def embed(file: UploadFile = File(...)) -> EmbedOut:
+async def embed(request: Request, file: UploadFile = File(...)) -> EmbedOut:
     """Yalnızca yüz vektörü döner — D1 okuma/yazma yok, matrix kurulmaz.
 
     Tarayıcı bu vektörü IndexedDB'de saklar ve bir sonraki yüzde benzerlik
     karşılaştırması yapar. %70-80 eşik üstü eşleşmede /search hiç çağrılmaz,
     dolayısıyla D1'e hiç gidilmez.
     """
+    _embed_limiter.check(_client_ip(request))
     data = await run_in_threadpool(_read_upload, file)
     probe = await run_in_threadpool(_embed, data)
     del data
@@ -137,11 +173,18 @@ async def search(
     settings: Settings = Depends(get_settings),
     user=Depends(optional_user),
 ) -> SearchOut:
-    # Tek Turso isteği: yayın durumu + sürüm + güncel matris BLOB'u.
-    is_public, version, matrix_data = index_repo.public_version_matrix(db, folder_key)
+    _search_limiter.check(_client_ip(request))
+    # Tek Turso isteği: yayın durumu + sürüm + yetki varsa matris BLOB'u.
+    # Yetkisiz kullanıcıya BLOB SQL tarafında verilmez (bkz. repository).
+    owner_id = str(user.id) if user else ""
+    is_public, version, matrix_data = index_repo.public_version_matrix(
+        db, folder_key, owner_id
+    )
     if not is_public and (
         not user or not folder_repo.exists_for_user(db, user.id, folder_key)
     ):
+        raise Forbidden("Bu klasöre erişim iznin yok.")
+    if matrix_data is None:
         raise Forbidden("Bu klasöre erişim iznin yok.")
 
     # Tarayıcı benzerlik kontrolü için vektörü zaten hesaplattıysa görseli
@@ -153,6 +196,11 @@ async def search(
         data = await run_in_threadpool(_read_upload, file)
         probe = await run_in_threadpool(_embed, data)
         del data
+
+    # 0 eşiği bütün 20 bin yüzü döndürür; istemci düşük eşikle veri
+    # sızdıramasın / yanıtı şişiremesin.
+    if threshold is not None:
+        threshold = min(1.0, max(0.5, threshold))
 
     results, took_ms = await run_in_threadpool(
         _search,

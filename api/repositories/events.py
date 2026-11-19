@@ -9,21 +9,19 @@ from . import index as index_repo
 _SELECT = """
     SELECT e.*,
            json_extract(d.meta, '$.folder_date') AS drive_uploaded_at,
-           (SELECT file_id FROM drive_face_index
-            WHERE folder_key = e.folder_key ORDER BY file_id LIMIT 1) AS first_file_id,
+           m.first_file_id AS first_file_id,
            (SELECT COUNT(*) FROM event_attendees a WHERE a.event_id = e.id)
                AS attendee_count,
            (SELECT COUNT(*) FROM event_attendees a
             WHERE a.event_id = e.id AND a.user_id = ?) AS attending_flag,
            COALESCE(
                NULLIF(json_extract(d.meta, '$.folder_count'), ''),
-               (SELECT COUNT(DISTINCT f.file_id) FROM drive_face_index f
-                WHERE f.folder_key = e.folder_key)
+               m.images
            ) AS image_count,
-           (SELECT COALESCE(SUM(json_array_length(f.faces)), 0) FROM drive_face_index f
-            WHERE f.folder_key = e.folder_key) AS face_count
+           COALESCE(m.rows, 0) AS face_count
     FROM events e
     LEFT JOIN drive_folders d ON d.folder_key = e.folder_key
+    LEFT JOIN folder_matrices m ON m.folder_key = e.folder_key
 """
 
 
@@ -195,14 +193,8 @@ def leave(db: D1Client, slug: str, user_id: str) -> bool:
 
 
 def photos(db: D1Client, folder_key: str, limit: int = 24) -> list[dict]:
-    rows = db.query(
-        """
-        SELECT file_id, name, width, height FROM drive_face_index
-        WHERE folder_key = ?
-        ORDER BY file_id LIMIT ?
-        """,
-        (folder_key, limit),
-    )
+    files = index_repo.folder_files(db, folder_key)
+    files.sort(key=lambda row: str(row.get("file_id") or ""))
     return [
         {
             "file_id": str(row.get("file_id") or ""),
@@ -210,6 +202,6 @@ def photos(db: D1Client, folder_key: str, limit: int = 24) -> list[dict]:
             "width": int(row.get("width") or 0),
             "height": int(row.get("height") or 0),
         }
-        for row in rows
+        for row in files[:limit]
         if row.get("file_id")
     ]

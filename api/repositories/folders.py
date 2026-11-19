@@ -10,12 +10,11 @@ def list_for_user(db: D1Client, owner_id: str) -> list[dict]:
     rows = db.query(
         """
         SELECT d.folder_key, d.meta, d.updated_at,
-               COUNT(f.file_id) AS image_count,
-               COALESCE(SUM(json_array_length(f.faces)), 0) AS face_count
+               COALESCE(m.images, 0) AS image_count,
+               COALESCE(m.rows, 0) AS face_count
         FROM drive_folders d
-        LEFT JOIN drive_face_index f ON f.folder_key = d.folder_key
+        LEFT JOIN folder_matrices m ON m.folder_key = d.folder_key
         WHERE d.owner_id = ?
-        GROUP BY d.folder_key, d.meta, d.updated_at
         ORDER BY d.updated_at DESC
         """,
         (owner_id,),
@@ -86,10 +85,6 @@ def delete(db: D1Client, owner_id: str, folder_key: str) -> bool:
     db.batch(
         [
             {
-                "sql": "DELETE FROM drive_face_index WHERE folder_key = ?",
-                "params": [folder_key],
-            },
-            {
                 "sql": "DELETE FROM folder_index_versions WHERE folder_key = ?",
                 "params": [folder_key],
             },
@@ -112,7 +107,7 @@ def delete(db: D1Client, owner_id: str, folder_key: str) -> bool:
 
 def get_version(db: D1Client, folder_key: str) -> int:
     row = db.query_one(
-        "SELECT version FROM folder_index_versions WHERE folder_key = ? LIMIT 1",
+        "SELECT version FROM folder_matrices WHERE folder_key = ? LIMIT 1",
         (folder_key,),
     )
     return int((row or {}).get("version") or 0)
@@ -133,8 +128,18 @@ def bump_version(db: D1Client, folder_key: str) -> int:
 
 
 def find_folder_of_file(db: D1Client, file_id: str) -> str | None:
-    row = db.query_one(
-        "SELECT folder_key FROM drive_face_index WHERE file_id = ? LIMIT 1",
-        (file_id,),
-    )
-    return str(row["folder_key"]) if row and row.get("folder_key") else None
+    """Dosyanın sahibi klasörü sıkıştırılmış tek satırlardan bulur."""
+    from . import index as index_repo
+
+    wanted = str(file_id)
+    rows = db.query("SELECT folder_key FROM folder_matrices")
+    for row in rows:
+        folder_key = str(row.get("folder_key") or "")
+        if not folder_key:
+            continue
+        if any(
+            str(item.get("file_id") or "") == wanted
+            for item in index_repo.folder_files(db, folder_key)
+        ):
+            return folder_key
+    return None

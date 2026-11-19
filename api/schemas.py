@@ -3,7 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from typing import Annotated
+
+_FileId = Annotated[str, StringConstraints(max_length=255, strip_whitespace=True)]
 
 
 class ORMModel(BaseModel):
@@ -178,11 +181,11 @@ class EmbedOut(BaseModel):
 
 class PreviewZipIn(BaseModel):
     folder_key: str
-    file_ids: list[str] = Field(default_factory=list, max_length=500)
+    file_ids: list[_FileId] = Field(default_factory=list, max_length=500)
 
 
 class BulkDownloadIn(BaseModel):
-    file_ids: list[str] = Field(default_factory=list, max_length=200)
+    file_ids: list[_FileId] = Field(default_factory=list, max_length=200)
     size: int = Field(default=720, ge=320, le=2048)
 
 

@@ -1,12 +1,29 @@
-.git
-.venv
-__pycache__
-*.pyc
+# Üretim imajına yalnızca API'nin ihtiyaç duyduğu kaynak kodu girer.
+# DB yedeği, migration SQL'leri, secret kurulum scriptleri ve yerel dosyalar
+# Render container'ına aktarılmaz.
+.git/
 .env
-.env.bak
+.env.*
+!.env.example
+.venv/
+.venv-modal/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sql
+*.pem
+*.key
 credentials.json
-.streamlit/secrets.toml
+.streamlit/
+web/
+node_modules/
+scripts/
+migrations/
 app.py
 indexer.py
-*.sqlite
-*.zip
+core/d1_store.py
+core/turso_store.py
+core/storage.py

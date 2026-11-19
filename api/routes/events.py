@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from pathlib import Path
 
@@ -99,9 +100,14 @@ def event_photos(
     slug: str,
     limit: int = Query(default=24, ge=1, le=60),
     db: D1Client = Depends(get_db),
+    viewer=Depends(optional_user),
 ) -> EventPhotoListOut:
     event = repo.get_by_slug(db, slug)
     if not event:
+        raise NotFound("Etkinlik bulunamadı.")
+    if not event.get("is_public", True) and (
+        not viewer or str(event.get("owner_id") or "") != str(viewer.id)
+    ):
         raise NotFound("Etkinlik bulunamadı.")
     return service.event_photos(db, event["folder_key"], limit)
 
@@ -211,11 +217,12 @@ def public_photos_zip(
         finally:
             release_memory()
 
+    safe_key = re.sub(r"[^A-Za-z0-9_-]", "", folder_key)[:24] or "indirme"
     return StreamingResponse(
         generate(),
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="momenz-{folder_key[:24]}.zip"',
+            "Content-Disposition": f'attachment; filename="momenz-{safe_key}.zip"',
             "Cache-Control": "no-store",
             # Proxy'ler gövdeyi tamponlamasın; aksi halde uzun indirmede
             # kesilen akış kullanıcıya "corrupted zip" olarak görünüyor.
