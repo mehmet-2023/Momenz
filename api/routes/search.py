@@ -172,15 +172,20 @@ async def search(
 ) -> SearchOut:
     _search_limiter.check(_client_ip(request))
     owner_id = str(user.id) if user else ""
-    is_public, version, matrix_data = index_repo.public_version_matrix(
-        db, folder_key, owner_id
+    # Önce yalnızca yayın bayrağı + sürüm okunur (küçük satır). Matris BLOB'u
+    # burada çekilmez; SearchService cache'i sıcaksa hiç indirilmez, değilse
+    # aşağıdaki threadpool içinde tek satır olarak yüklenir.
+    is_public, version, _ = await run_in_threadpool(
+        index_repo.public_version_matrix, db, folder_key, owner_id, False
     )
-    if not is_public and (
-        not user or not folder_repo.exists_for_user(db, user.id, folder_key)
-    ):
-        raise Forbidden("Bu klasöre erişim iznin yok.")
-    if matrix_data is None:
-        raise Forbidden("Bu klasöre erişim iznin yok.")
+    if not is_public:
+        if not user:
+            raise Forbidden("Bu klasöre erişim iznin yok.")
+        allowed = await run_in_threadpool(
+            folder_repo.exists_for_user, db, user.id, folder_key
+        )
+        if not allowed:
+            raise Forbidden("Bu klasöre erişim iznin yok.")
 
     probe = _parse_embedding(embedding)
     if probe is None:
@@ -201,7 +206,7 @@ async def search(
         folder_key,
         threshold,
         version,
-        matrix_data,
+        None,
     )
 
     items: list[SearchResultOut] = []

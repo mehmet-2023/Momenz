@@ -194,7 +194,12 @@ export default function EventDetailPage() {
                       onClick={() => setLightbox(photo)}
                       aria-label={`${photo.name} fotoğrafını büyüt`}
                     >
-                      <img src={photo.thumb_url} alt={photo.name} />
+                      <img
+                        src={photo.thumb_url}
+                        alt={photo.name}
+                        loading="lazy"
+                        decoding="async"
+                      />
                       <span className="photo-index">+</span>
                     </button>
                   ))}

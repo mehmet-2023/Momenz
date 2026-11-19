@@ -14,17 +14,16 @@ from .config import Settings
 _UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
 
-class HealthExemptTrustedHostMiddleware(TrustedHostMiddleware):
-    """Host kısıtını health/ROOT dışındaki yollarda uygula.
+class RootExemptTrustedHostMiddleware(TrustedHostMiddleware):
+    """Host kısıtını kök yol dışındaki tüm yollarda uygula.
 
-    Render/PaaS internal health probe'ları Host header'ı public domain yerine
-    iç hostname ya da IP ile gönderir. TrustedHost bunu 400 ile reddettiği için
-    deploy health check'e takılıyordu. Sahte Host ile api yollarına erişim
-    hâlâ kapalı; sadece /health ve / muaf.
+    Render/PaaS port kontrolleri Host header'ı public domain yerine iç
+    hostname ya da IP ile gönderebilir. Sahte Host ile API yollarına erişim
+    kapalı kalır; yalnızca ``/`` muaftır.
     """
 
-    async def __call__(self, scope, receive, send) -> None:  
-        if scope["type"] == "http" and scope.get("path") in {"/health", "/"}:
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http" and scope.get("path") == "/":
             await self.app(scope, receive, send)
             return
         await super().__call__(scope, receive, send)

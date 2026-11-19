@@ -102,6 +102,9 @@ def delete(db: D1Client, owner_id: str, folder_key: str) -> bool:
             },
         ]
     )
+    from . import index as index_repo
+
+    index_repo.invalidate_files_cache(folder_key)
     return True
 
 

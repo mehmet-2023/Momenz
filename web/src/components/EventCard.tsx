@@ -11,7 +11,7 @@ export default function EventCard({ event, view = "grid" }: Props) {
     <Link className={`event-card${view === "list" ? " event-row" : ""}`} href={`/events/${event.slug}`}>
       <div className="event-media">
         {event.cover_url ? (
-          <img src={event.cover_url} alt="" />
+          <img src={event.cover_url} alt="" loading="lazy" decoding="async" />
         ) : (
           <div className="event-cover-empty">KAPAK YOK</div>
         )}

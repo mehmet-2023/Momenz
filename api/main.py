@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -16,14 +15,13 @@ from .db import schema as db_schema
 from .errors import AppError, app_error_handler, unhandled_error_handler
 from .middleware import (
     CSRFMiddleware,
-    HealthExemptTrustedHostMiddleware,
     RequestIdMiddleware,
+    RootExemptTrustedHostMiddleware,
     SecurityHeadersMiddleware,
 )
 from .repositories import jobs as job_repo
 from .repositories import users as user_repo
 from .routes import auth, events, folders, images, jobs, search
-from .schemas import HealthOut
 from .services.search import SearchService
 
 logging.basicConfig(
@@ -43,16 +41,13 @@ async def lifespan(app: FastAPI):
         )
 
     # TursoClient kurulumu ağ isteği yapmaz. Şema kontrolü ve bakım
-    # sorguları ESKİDEN burada senkron çalışıyordu; 300 sn timeout + 4 retry
-    # yüzünden lifespan dakikalarca bloke oluyor, Render health check
-    # timeout'a girip 502/503 üretiyordu. Artık hepsi kısa timeout'lu arka
-    # plan thread'inde — uygulama anında dinlemeye başlar.
+    # sorguları ESKİDEN burada senkron çalışıyordu; 600 sn timeout + 4 retry
+    # yüzünden lifespan dakikalarca bloke oluyordu. Artık hepsi kısa
+    # timeout'lu arka plan thread'inde — uygulama anında dinlemeye başlar.
     db = TursoClient(**settings.db_config)
     app.state.db = db
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
-    app.state.db_ok = True
-    app.state.schema_ready = True
 
     def _prepare_db() -> None:
         probe = TursoClient(
@@ -104,7 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     app.add_middleware(
-        HealthExemptTrustedHostMiddleware, allowed_hosts=settings.trusted_hosts
+        RootExemptTrustedHostMiddleware, allowed_hosts=settings.trusted_hosts
     )
     app.add_middleware(
         CORSMiddleware,
@@ -149,19 +144,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root() -> dict[str, str]:
         return {"service": "momenz-api"}
-
-    @app.get("/health", response_model=HealthOut, tags=["system"])
-    def health(request: Request) -> HealthOut:
-        # Saf liveness: DB'ye istek atmaz. Turso bağlantısı/şeması lifespan'ta
-        # bir kez doğrulanır; Render polling'i artık hiçbir satır okutmaz.
-        ok = bool(getattr(request.app.state, "db_ok", False))
-        return HealthOut(
-            status="ok" if ok else "degraded",
-            d1=ok,
-            environment=settings.environment,
-            time=datetime.now(timezone.utc),
-            schema_ready=bool(getattr(request.app.state, "schema_ready", False)),
-        )
 
     prefix = "/api/v1"
     app.include_router(auth.router, prefix=prefix)

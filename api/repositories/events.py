@@ -197,7 +197,9 @@ def photos(
 ) -> list[dict]:
     if files is None:
         files = index_repo.folder_files(db, folder_key)
-    files.sort(key=lambda row: str(row.get("file_id") or ""))
+    # Kopyala-sırala: çağıran taraf süreç içi cache'lenmiş listeyi paylaşabilir;
+    # onu yerinde değiştirmek eşzamanlı isteklerde yarışa yol açar.
+    ordered = sorted(files, key=lambda row: str(row.get("file_id") or ""))
     return [
         {
             "file_id": str(row.get("file_id") or ""),
@@ -205,6 +207,6 @@ def photos(
             "width": int(row.get("width") or 0),
             "height": int(row.get("height") or 0),
         }
-        for row in files[:limit]
+        for row in ordered[:limit]
         if row.get("file_id")
     ]

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -18,6 +17,7 @@ from ..errors import Forbidden, NotFound
 from ..repositories import folders as folder_repo
 from ..repositories import index as index_repo
 from ..schemas import PreviewZipIn
+from ..services.thumbnails import render_thumbnail
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -49,21 +49,9 @@ def thumbnail(
     size = min(size, 512)
 
     path = _thumb_path(settings, file_id, size)
-    if path.exists() and (time.time() - path.stat().st_mtime) < settings.thumb_cache_ttl_seconds:
-        return Response(
-            path.read_bytes(),
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
-        )
-
-    from ..services.drive import get_drive_client
-
-    image = get_drive_client(settings).fetch_image(file_id, size)
-    if image is None:
+    data = render_thumbnail(settings, file_id, size, path)
+    if data is None:
         raise NotFound("Önizleme alınamadı.")
-    data = encode_jpeg_bytes(image, quality=78)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
     return Response(
         data,
         media_type="image/jpeg",

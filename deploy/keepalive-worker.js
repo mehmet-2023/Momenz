@@ -1,6 +1,6 @@
 export default {
   async scheduled(event, env, ctx) {
-    const url = env.RENDER_URL || "https://momenz.onrender.com/health";
+    const url = env.RENDER_URL || "https://momenz.onrender.com/";
     ctx.waitUntil(
       fetch(url, {
         headers: { "User-Agent": "Momenz-Keepalive/1.0" },

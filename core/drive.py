@@ -545,9 +545,18 @@ class DriveClient:
     # ------------------------------------------------------------------ fetching
 
     def fetch_image(
-        self, file_id: str, size: int = 768, resource_key: str | None = None
+        self,
+        file_id: str,
+        size: int = 768,
+        resource_key: str | None = None,
+        max_candidates: int | None = None,
     ) -> np.ndarray | None:
-        """Görseli tam dosyayı indirmeden Drive thumbnail'ları üzerinden getirir."""
+        """Görseli tam dosyayı indirmeden Drive thumbnail'ları üzerinden getirir.
+
+        ``max_candidates`` verilirse yalnızca ilk N kaynak denenir. Thumbnail
+        uçları bunu kullanır: başarısız bir dosya için 7 ayrı Drive isteği
+        (retry'larla birlikte onlarca) yapılmasın.
+        """
         size = max(256, min(int(size), 2048))
         candidates: list[tuple[str, dict | None, bool]] = []
 
@@ -587,6 +596,9 @@ class DriveClient:
                     self._creds is not None,
                 )
             )
+
+        if max_candidates is not None:
+            candidates = candidates[: max(0, int(max_candidates))]
 
         for url, params, use_auth in candidates:
             try:

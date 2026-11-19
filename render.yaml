@@ -7,7 +7,6 @@ services:
     plan: free
     region: frankfurt
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /health
     envVars:
       - key: MOMENZ_ENVIRONMENT
         value: prod

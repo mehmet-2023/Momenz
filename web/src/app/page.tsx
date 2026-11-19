@@ -191,7 +191,12 @@ export default function Home() {
               <Link className="featured" href={`/events/${featured.slug}`}>
                 <div className="featured-media">
                   {featured.cover_url ? (
-                    <img src={featured.cover_url} alt="" />
+                    <img
+                      src={featured.cover_url}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     <div className="featured-placeholder">KAPAK YOK</div>
                   )}

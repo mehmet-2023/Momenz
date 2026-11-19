@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
@@ -176,11 +175,3 @@ class PreviewZipIn(BaseModel):
 class BulkDownloadIn(BaseModel):
     file_ids: list[_FileId] = Field(default_factory=list, max_length=200)
     size: int = Field(default=720, ge=320, le=2048)
-
-
-class HealthOut(BaseModel):
-    status: str
-    d1: bool
-    environment: str
-    time: datetime
-    schema_ready: bool = True

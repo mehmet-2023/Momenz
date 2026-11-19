@@ -27,8 +27,8 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [results, setResults] = useState<SearchResponse | null>(null);
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [revealReady, setRevealReady] = useState(false);
+  const [preloadedFor, setPreloadedFor] = useState<SearchResponse | null>(null);
+  const [imageProgress, setImageProgress] = useState({ loaded: 0, total: 0 });
   const [fromCache, setFromCache] = useState(false);
   const [cacheNote, setCacheNote] = useState("");
   const [quality, setQuality] = useState<Quality>(720);
@@ -89,24 +89,69 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
   }, [stopCamera]);
 
   useEffect(() => {
-    const total = results?.results.length ?? 0;
-    setVisibleCount(0);
-    setRevealReady(false);
-    if (!total) return;
-    let timer = 0;
-    const start = window.setTimeout(() => {
-      setRevealReady(true);
-      const step = Math.max(2, Math.ceil(total / 14));
-      let shown = 0;
-      timer = window.setInterval(() => {
-        shown = Math.min(total, shown + step);
-        setVisibleCount(shown);
-        if (shown >= total) window.clearInterval(timer);
-      }, 220);
-    }, 420);
+    // Sonuç kartlarını, o anki tüm benzersiz thumbnail'lar yüklenene kadar
+    // gösterme. Sınırlı eşzamanlılık (6) ile ön yükleme yapılır; aksi halde
+    // 200'e varan <img> aynı anda arka uca/Drive'a saldırıp 502/503 üretiyordu.
+    setPreloadedFor(null);
+    const urls = Array.from(
+      new Set(
+        (results?.results ?? [])
+          .map((item) => item.thumb_url)
+          .filter((url): url is string => Boolean(url)),
+      ),
+    );
+    setImageProgress({ loaded: 0, total: urls.length });
+    if (!urls.length) {
+      setPreloadedFor(results);
+      return;
+    }
+
+    let cancelled = false;
+    let loaded = 0;
+    const queue = [...urls];
+    const CONCURRENCY = 6;
+    const TIMEOUT_MS = 12000;
+
+    const preload = (url: string) =>
+      new Promise<void>((resolve) => {
+        const image = new Image();
+        let settled = false;
+        let timer = 0;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          image.onload = null;
+          image.onerror = null;
+          if (!cancelled) {
+            loaded += 1;
+            setImageProgress({ loaded, total: urls.length });
+          }
+          resolve();
+        };
+        timer = window.setTimeout(finish, TIMEOUT_MS);
+        image.onload = finish;
+        image.onerror = finish;
+        image.src = url;
+      });
+
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, queue.length) },
+      async () => {
+        while (!cancelled) {
+          const url = queue.shift();
+          if (!url) break;
+          await preload(url);
+        }
+      },
+    );
+
+    void Promise.all(workers).then(() => {
+      if (!cancelled) setPreloadedFor(results);
+    });
+
     return () => {
-      window.clearTimeout(start);
-      window.clearInterval(timer);
+      cancelled = true;
     };
   }, [results]);
 
@@ -341,6 +386,12 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
 
       {results === null ? null : allResults.length === 0 ? (
         <div className="face-empty">Bu etkinlikte yüzünle eşleşen fotoğraf bulunamadı.</div>
+      ) : preloadedFor !== results ? (
+        <div className="results-loading" role="status" aria-live="polite">
+          {imageProgress.total > 0
+            ? `GÖRSELLER HAZIRLANIYOR · ${imageProgress.loaded}/${imageProgress.total}`
+            : "SONUÇLAR HAZIRLANIYOR"}
+        </div>
       ) : (
         <div className="face-results">
           <div className="results-toolbar">
@@ -376,23 +427,13 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
             </div>
           </div>
           {zipError && <div className="alert alert-error">{zipError}</div>}
-          {!revealReady && (
-            <div className="results-loading">
-              PAKETLER HAZIRLANIYOR · {allResults.length} SONUÇ
-            </div>
-          )}
           <div className="grid">
-            {allResults.slice(0, visibleCount).map((item) => (
+            {allResults.map((item) => (
               <div className="result-reveal" key={item.file_id}>
                 <ResultCard result={item} />
               </div>
             ))}
           </div>
-          {revealReady && visibleCount < allResults.length && (
-            <div className="results-loading">
-              PAKET {visibleCount}/{allResults.length} AÇILIYOR
-            </div>
-          )}
         </div>
       )}
     </section>

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
+import time
 import zlib
 from typing import Any
 
@@ -22,6 +24,14 @@ _MAX_META_BYTES = 1024 * 1024
 _MAX_EMB_BYTES = 1024  # 128 float32 -> 512 byte -> 684 base64 karakter
 
 _MATRIX_TABLE_READY: set[int] = set()
+
+# Her thumbnail isteği 20.000 dosyalık BLOB'u baştan çözüyordu; yoğun taramada
+# threadpool/RAM şişip istekler yavaşlıyordu. Dosya listesi süreç içinde kısa
+# TTL ile cache'lenir (klasör index'i nadiren değişir; yazımda invalidate edilir).
+_files_cache: dict[str, tuple[float, bool, list[dict]]] = {}
+_files_locks: dict[str, threading.Lock] = {}
+_files_guard = threading.Lock()
+_FILES_CACHE_TTL = 30.0
 
 
 class IndexDataError(ValueError):
@@ -316,6 +326,7 @@ def save_index_row(
             json.dumps(meta or {}, ensure_ascii=False, separators=(",", ":")),
         ),
     )
+    invalidate_files_cache(folder_key)
 
 
 def folder_is_public(db: D1Client, folder_key: str) -> bool:
@@ -333,6 +344,8 @@ def set_matrix_public(db: D1Client, folder_key: str, is_public: bool) -> None:
         "UPDATE folder_matrices SET is_public = ? WHERE folder_key = ?",
         (1 if is_public else 0, folder_key),
     )
+    # Yayın durumu değişti; cache'lenmiş dosya listesi eski bayrağı taşımasın.
+    invalidate_files_cache(folder_key)
 
 
 def save_matrix(
@@ -377,6 +390,7 @@ def save_matrix(
             int(array.shape[0]),
         ),
     )
+    invalidate_files_cache(folder_key)
 
 
 def _decode_matrix_row(row: dict) -> tuple[np.ndarray, list[dict]] | None:
@@ -407,13 +421,21 @@ def load_matrix(
 
 
 def public_version_matrix(
-    db: D1Client, folder_key: str, owner_id: str | None = None
+    db: D1Client,
+    folder_key: str,
+    owner_id: str | None = None,
+    include_matrix: bool = True,
 ) -> tuple[bool, int, tuple[np.ndarray, list[dict]] | None]:
-    """Arama için gereken her şeyi TEKE okumayla döndürür.
+    """Arama için yayın durumu + sürüm (+ istenirse matris) döndürür.
 
     Yetkisiz kullanıcıya matris BLOB'u hiç indirilmez: izin kontrolü SQL'in
     içinde yapılır. Böylece kötü niyetli biri özel bir klasörün folder_key'ini
     bilse bile 5 MB'lık matrisi sunucuya çektiremez.
+
+    ``include_matrix=False`` yalnızca yetki/sürüm kontrolü için küçük satırı
+    okur. Matris daha sonra ``SearchService`` cache'inden ya da threadpool
+    içindeki tek satır okumasından gelir; böylece async rota 16 MB'lık BLOB
+    yüzünden bloke olmaz.
     """
     viewer = str(owner_id or "")
     allowed = """(
@@ -422,18 +444,25 @@ def public_version_matrix(
             WHERE d.folder_key = m.folder_key AND d.owner_id = ?
         )
     )"""
+    if include_matrix:
+        columns = (
+            f"CASE WHEN {allowed} THEN m.matrix END AS matrix, "
+            f"CASE WHEN {allowed} THEN m.metas END AS metas"
+        )
+        params: tuple = (viewer, viewer, folder_key)
+    else:
+        columns = "NULL AS matrix, NULL AS metas"
+        params = (folder_key,)
     row = db.query_one(
         f"""
-        SELECT m.is_public, m.version, m.rows,
-               CASE WHEN {allowed} THEN m.matrix END AS matrix,
-               CASE WHEN {allowed} THEN m.metas END AS metas
+        SELECT m.is_public, m.version, m.rows, {columns}
         FROM folder_matrices m WHERE m.folder_key = ? LIMIT 1
         """,
-        (viewer, viewer, folder_key),
+        params,
     ) or {}
     version = int(row.get("version") or 0)
     matrix_data = None
-    if row.get("matrix") is not None:
+    if include_matrix and row.get("matrix") is not None:
         matrix_data = _decode_matrix_row(row)
     return bool(row.get("is_public")), version, matrix_data
 
@@ -557,33 +586,56 @@ def file_ids(db: D1Client, folder_key: str, values: list[str]) -> list[str]:
     ]
 
 
+def invalidate_files_cache(folder_key: str | None = None) -> None:
+    """Index güncellendiğinde çözülmüş dosya listesini düşür."""
+    with _files_guard:
+        if folder_key is None:
+            _files_cache.clear()
+        else:
+            _files_cache.pop(folder_key, None)
+
+
+def _files_lock_for(folder_key: str) -> threading.Lock:
+    with _files_guard:
+        lock = _files_locks.get(folder_key)
+        if lock is None:
+            lock = threading.Lock()
+            _files_locks[folder_key] = lock
+        return lock
+
+
 def public_files(db: D1Client, folder_key: str) -> tuple[bool, list[dict]]:
-    """Yayın bayrağı + dosya meta'ları TEK satır okumayla döner."""
-    row = db.query_one(
-        "SELECT is_public, files FROM folder_matrices WHERE folder_key = ? LIMIT 1",
-        (folder_key,),
-    ) or {}
-    return bool(row.get("is_public")), _decode_files(row.get("files"), with_faces=False)
+    """Yayın bayrağı + dosya meta'ları: Bir kez oku/çöz, sonra cache'den ver."""
+    cached = _files_cache.get(folder_key)
+    if cached is not None and time.monotonic() - cached[0] < _FILES_CACHE_TTL:
+        return cached[1], cached[2]
+    with _files_lock_for(folder_key):
+        cached = _files_cache.get(folder_key)
+        if cached is not None and time.monotonic() - cached[0] < _FILES_CACHE_TTL:
+            return cached[1], cached[2]
+        row = db.query_one(
+            "SELECT is_public, files FROM folder_matrices WHERE folder_key = ? LIMIT 1",
+            (folder_key,),
+        ) or {}
+        result = (
+            bool(row.get("is_public")),
+            _decode_files(row.get("files"), with_faces=False),
+        )
+        _files_cache[folder_key] = (time.monotonic(), result[0], result[1])
+        return result
 
 
 def public_file_ids(
     db: D1Client, folder_key: str, values: list[str]
 ) -> tuple[bool, list[str]]:
-    """Yayın bayrağı + doğrulanmış dosya id'leri TEK satır okumayla döner.
-
-    Thumbnail uçları eskiden ``events`` ve ``folder_matrices`` için iki ayrı
-    sorgu yapıyordu; görsel başına okuma sayısını yarıya indirir.
-    """
+    """Yayın bayrağı + doğrulanmış dosya id'leri (cache'li dosya listesinden)."""
     if not values:
         return False, []
-    row = db.query_one(
-        "SELECT is_public, files FROM folder_matrices WHERE folder_key = ? LIMIT 1",
-        (folder_key,),
-    ) or {}
+    is_public, files = public_files(db, folder_key)
     wanted = {str(value) for value in values if value}
     found = [
         str(item.get("file_id") or "")
-        for item in _decode_files(row.get("files"), with_faces=False)
+        for item in files
         if str(item.get("file_id") or "") in wanted
     ]
-    return bool(row.get("is_public")), found
+    return is_public, found

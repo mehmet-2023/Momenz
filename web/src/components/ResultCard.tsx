@@ -1,13 +1,22 @@
+"use client";
+
+import { useState } from "react";
 import type { SearchResult } from "@/lib/types";
 
 export default function ResultCard({ result }: { result: SearchResult }) {
+  const [failed, setFailed] = useState(false);
+  const thumb = result.thumb_url;
+
   return (
     <div className="card">
-      {result.thumb_url ? (
+      {thumb && !failed ? (
         <img
           className="result-img"
-          src={result.thumb_url}
+          src={thumb}
           alt={result.name || result.file_id}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
         />
       ) : (
         <div className="result-img" aria-hidden="true" />

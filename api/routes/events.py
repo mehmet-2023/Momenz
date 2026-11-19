@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -27,6 +26,7 @@ from ..schemas import (
     MessageOut,
 )
 from ..services import events as service
+from ..services.thumbnails import render_thumbnail
 
 router = APIRouter(prefix="/events", tags=["events"])
 public_router = APIRouter(prefix="/public", tags=["public"])
@@ -150,21 +150,9 @@ def public_thumb(
         raise NotFound("Fotoğraf bu etkinlikte bulunamadı.")
 
     path = _thumb_cache_path(settings, file_id, size)
-    if path.exists() and (time.time() - path.stat().st_mtime) < settings.thumb_cache_ttl_seconds:
-        return Response(
-            path.read_bytes(),
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
-        )
-
-    from ..services.drive import get_drive_client
-
-    image = get_drive_client(settings).fetch_image(file_id, size)
-    if image is None:
+    data = render_thumbnail(settings, file_id, size, path)
+    if data is None:
         raise NotFound("Önizleme alınamadı.")
-    data = encode_jpeg_bytes(image, quality=78)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
     return Response(
         data,
         media_type="image/jpeg",
