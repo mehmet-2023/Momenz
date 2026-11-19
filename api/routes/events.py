@@ -124,9 +124,10 @@ def public_photos(
     limit: int = Query(default=24, ge=1, le=60),
     db: D1Client = Depends(get_db),
 ) -> EventPhotoListOut:
-    if not repo.is_public_folder(db, folder_key):
+    is_public, files = index_repo.public_files(db, folder_key)
+    if not is_public:
         raise Forbidden("Bu klasör herkese açık değil.")
-    return service.event_photos(db, folder_key, limit)
+    return service.event_photos(db, folder_key, limit, files=files)
 
 
 @public_router.get("/folders/{folder_key}/photos/{file_id}/thumb")
@@ -137,13 +138,15 @@ def public_thumb(
     db: D1Client = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    if not repo.is_public_folder(db, folder_key):
+    # Yayın kontrolü ve dosya doğrulaması TEK satır okumayla yapılır.
+    is_public, found = index_repo.public_file_ids(db, folder_key, [file_id])
+    if not is_public:
         raise Forbidden("Bu klasör herkese açık değil.")
     # Eski linklerdeki büyük boyut isteklerini küçük önizlemeye sabitle.
     size = min(size, 512)
     # 20.000+ fotoğraf içinde doğrudan ID sorgusu: ilk 500'e bakmak eşleşen
     # fotoğrafları yanlışlıkla "bulunamadı" yapıyordu.
-    if not index_repo.file_ids(db, folder_key, [file_id]):
+    if not found:
         raise NotFound("Fotoğraf bu etkinlikte bulunamadı.")
 
     path = _thumb_cache_path(settings, file_id, size)

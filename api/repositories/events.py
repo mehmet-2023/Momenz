@@ -192,8 +192,11 @@ def leave(db: D1Client, slug: str, user_id: str) -> bool:
     return True
 
 
-def photos(db: D1Client, folder_key: str, limit: int = 24) -> list[dict]:
-    files = index_repo.folder_files(db, folder_key)
+def photos(
+    db: D1Client, folder_key: str, limit: int = 24, files: list[dict] | None = None
+) -> list[dict]:
+    if files is None:
+        files = index_repo.folder_files(db, folder_key)
     files.sort(key=lambda row: str(row.get("file_id") or ""))
     return [
         {

@@ -138,22 +138,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except Exception:
             ok = False
         try:
-            required = (
-                "users",
-                "jobs",
-                "refresh_tokens",
-                "folder_index_versions",
-                "events",
-                "event_attendees",
-                "folder_matrices",
-            )
-            row = db.query_one(
-                "SELECT count(*) AS n FROM sqlite_master "
-                "WHERE type='table' AND name IN "
-                "(" + ",".join("?" for _ in required) + ")",
-                required,
-            )
-            schema_ready = int((row or {}).get("n") or 0) == len(required)
+            # sqlite_master taraması 36 satır okuyordu; Render /health'i sürekli
+            # pollinglediği için tek satırlık bir varlık kontrolü yeterli.
+            # Lifespan'daki ensure_schema zaten tüm tabloları garanti ediyor.
+            db.query_one("SELECT 1 AS ok FROM folder_matrices LIMIT 1")
+            schema_ready = True
         except Exception:
             schema_ready = False
         return HealthOut(

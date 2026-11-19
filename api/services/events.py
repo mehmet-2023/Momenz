@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
 import unicodedata
 
 from ..db import D1Client
@@ -15,6 +17,18 @@ from ..schemas import (
 )
 from ..security import new_id
 from . import folders as folder_service
+
+# Her ana sayfa açılışında aynı 5 etkinlik için tekrar tekrar satır okunmasın.
+# Yalnızca anonim/genel liste cache'lenir; kullanıcıya özel is_attending /
+# is_owner alanları içerdiği için viewer'lı istekler cache'e girmez.
+_events_cache: dict[tuple[str, int, int], tuple[float, "EventListOut"]] = {}
+_events_cache_lock = threading.Lock()
+_EVENTS_CACHE_TTL = 30.0
+
+
+def invalidate_events_cache() -> None:
+    with _events_cache_lock:
+        _events_cache.clear()
 
 
 def _slug(title: str) -> str:
@@ -32,6 +46,13 @@ def list_events(
     limit: int = 24,
     offset: int = 0,
 ) -> EventListOut:
+    key = None if viewer_id else (query or "", limit, offset)
+    if key is not None:
+        with _events_cache_lock:
+            hit = _events_cache.get(key)
+            if hit and time.monotonic() - hit[0] < _EVENTS_CACHE_TTL:
+                return hit[1]
+
     items = repo.list_all(
         db,
         viewer_id,
@@ -40,10 +61,14 @@ def list_events(
         limit=limit,
         offset=offset,
     )
-    return EventListOut(
+    result = EventListOut(
         items=[EventOut(**item) for item in items],
         total=repo.count_all(db, upcoming=upcoming, query=query),
     )
+    if key is not None:
+        with _events_cache_lock:
+            _events_cache[key] = (time.monotonic(), result)
+    return result
 
 
 def my_events(db: D1Client, owner_id: str) -> EventListOut:
@@ -83,6 +108,7 @@ def create_event(
     created = repo.get_by_folder(db, folder.key, owner_id)
     if not created:
         raise RuntimeError("Etkinlik oluşturulamadı.")
+    invalidate_events_cache()
     return EventOut(**created), job_id
 
 
@@ -98,8 +124,10 @@ def leave_event(db: D1Client, slug: str, user_id: str) -> bool:
     return True
 
 
-def event_photos(db: D1Client, folder_key: str, limit: int = 24) -> EventPhotoListOut:
-    rows = repo.photos(db, folder_key, limit)
+def event_photos(
+    db: D1Client, folder_key: str, limit: int = 24, files: list[dict] | None = None
+) -> EventPhotoListOut:
+    rows = repo.photos(db, folder_key, limit, files=files)
     return EventPhotoListOut(
         items=[
             EventPhotoOut(

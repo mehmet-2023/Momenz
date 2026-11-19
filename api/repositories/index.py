@@ -555,3 +555,35 @@ def file_ids(db: D1Client, folder_key: str, values: list[str]) -> list[str]:
         for row in folder_files(db, folder_key)
         if str(row.get("file_id") or "") in wanted
     ]
+
+
+def public_files(db: D1Client, folder_key: str) -> tuple[bool, list[dict]]:
+    """Yayın bayrağı + dosya meta'ları TEK satır okumayla döner."""
+    row = db.query_one(
+        "SELECT is_public, files FROM folder_matrices WHERE folder_key = ? LIMIT 1",
+        (folder_key,),
+    ) or {}
+    return bool(row.get("is_public")), _decode_files(row.get("files"), with_faces=False)
+
+
+def public_file_ids(
+    db: D1Client, folder_key: str, values: list[str]
+) -> tuple[bool, list[str]]:
+    """Yayın bayrağı + doğrulanmış dosya id'leri TEK satır okumayla döner.
+
+    Thumbnail uçları eskiden ``events`` ve ``folder_matrices`` için iki ayrı
+    sorgu yapıyordu; görsel başına okuma sayısını yarıya indirir.
+    """
+    if not values:
+        return False, []
+    row = db.query_one(
+        "SELECT is_public, files FROM folder_matrices WHERE folder_key = ? LIMIT 1",
+        (folder_key,),
+    ) or {}
+    wanted = {str(value) for value in values if value}
+    found = [
+        str(item.get("file_id") or "")
+        for item in _decode_files(row.get("files"), with_faces=False)
+        if str(item.get("file_id") or "") in wanted
+    ]
+    return bool(row.get("is_public")), found
