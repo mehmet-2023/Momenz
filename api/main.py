@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
 from .db import TursoClient, TursoError
+from .db import schema as db_schema
 from .deps import get_db
 from .errors import AppError, app_error_handler, unhandled_error_handler
 from .middleware import (
@@ -19,7 +20,6 @@ from .middleware import (
     RequestIdMiddleware,
     SecurityHeadersMiddleware,
 )
-from .repositories import index as index_repo
 from .repositories import jobs as job_repo
 from .repositories import users as user_repo
 from .routes import auth, events, folders, images, jobs, search
@@ -48,9 +48,9 @@ async def lifespan(app: FastAPI):
     except TursoError as exc:
         raise RuntimeError(f"Turso bağlantısı kurulamadı: {exc}") from exc
     try:
-        index_repo.ensure_folder_matrices(db)
+        db_schema.ensure_schema(db)
     except TursoError as exc:
-        raise RuntimeError(f"Turso matris tablosu hazırlanamadı: {exc}") from exc
+        raise RuntimeError(f"Turso şeması hazırlanamadı: {exc}") from exc
     app.state.db = db
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
@@ -138,12 +138,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except Exception:
             ok = False
         try:
+            required = (
+                "users",
+                "jobs",
+                "refresh_tokens",
+                "folder_index_versions",
+                "events",
+                "event_attendees",
+                "folder_matrices",
+            )
             row = db.query_one(
                 "SELECT count(*) AS n FROM sqlite_master "
                 "WHERE type='table' AND name IN "
-                "('users','jobs','refresh_tokens','folder_index_versions')"
+                "(" + ",".join("?" for _ in required) + ")",
+                required,
             )
-            schema_ready = int((row or {}).get("n") or 0) == 4
+            schema_ready = int((row or {}).get("n") or 0) == len(required)
         except Exception:
             schema_ready = False
         return HealthOut(
