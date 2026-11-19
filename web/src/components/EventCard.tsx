@@ -32,7 +32,6 @@ export default function EventCard({ event, view = "grid" }: Props) {
       <div className="event-card-foot">
         <span>{event.image_count} FOTOĞRAF</span>
         <span>{event.face_count} YÜZ</span>
-        <span>{event.attendee_count} KATILIMCI</span>
         <span className="event-card-arrow" aria-hidden="true">→</span>
       </div>
     </Link>

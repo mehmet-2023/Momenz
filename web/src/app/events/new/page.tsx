@@ -5,10 +5,26 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import LoadingScreen from "@/components/LoadingScreen";
-import { ApiError, createEvent, ensureCsrf, getJob } from "@/lib/api";
+import {
+  ApiError,
+  createEvent,
+  ensureCsrf,
+  getJob,
+  getMyEvents,
+  listFolders,
+} from "@/lib/api";
 import type { Event, Job } from "@/lib/types";
 
 const TERMINAL = ["done", "failed", "canceled"];
+
+/** URL'deki resource key / query farklarından bağımsız klasör kimliği. */
+function driveFolderId(raw: string): string {
+  const text = raw.trim();
+  const folder = text.match(/(?:^|[?&/])folders\/([^/?#&]+)/);
+  if (folder) return folder[1];
+  const id = text.match(/[?&]id=([^&#]+)/);
+  return id ? id[1] : text;
+}
 
 function mmss(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -87,6 +103,29 @@ export default function NewEventPage() {
     setBusy(true);
     setError("");
     try {
+      // Aynı Drive klasörü daha önce etkinliğe bağlandıysa yeni etkinlik
+      // açma; kullanıcıyı mevcut etkinliğe yönlendir. Kontrol başarısız olursa
+      // normal oluşturma akışına devam et.
+      let existing: Event | undefined;
+      try {
+        const [folders, mine] = await Promise.all([listFolders(), getMyEvents()]);
+        const folderId = driveFolderId(clean);
+        const folder = folders.find(
+          (item) => item.url && driveFolderId(item.url) === folderId,
+        );
+        existing = folder
+          ? mine.items.find((item) => item.folder_key === folder.key)
+          : undefined;
+      } catch {
+        existing = undefined;
+      }
+      if (existing) {
+        setError(`Bu Drive klasörü zaten “${existing.title}” etkinliği olarak ekli.`);
+        window.sessionStorage.setItem("momenz:existing-event", "1");
+        router.push(`/events/${existing.slug}`);
+        return;
+      }
+
       const created = await createEvent({ url: clean });
       setEvent(created.event);
       setJob(created.jobId ? await getJob(created.jobId) : null);

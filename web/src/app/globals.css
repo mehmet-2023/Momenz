@@ -633,12 +633,6 @@ textarea.input { min-height: 120px; resize: vertical; }
   font-family: var(--font-mono), monospace; font-size: .58rem;
   letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
 }
-.aside-owner { font-size: .84rem; color: var(--muted); }
-.aside-attendees {
-  margin-top: 12px; font-family: var(--font-mono), monospace;
-  font-size: .62rem; letter-spacing: .08em; color: var(--muted); text-align: center;
-}
-.aside-attendees b { color: var(--ink); font-size: .9rem; }
 .fact-list { margin: 0; }
 .fact-list > div {
   display: flex; justify-content: space-between; gap: 12px;

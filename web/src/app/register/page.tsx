@@ -48,8 +48,8 @@ export default function RegisterPage() {
           <h2>Kendini bulmaya<br />başla.</h2>
           <p>
             Etkinliklerde çekilen binlerce fotoğrafın arasında yüzünü bul.
-            Etkinliğini ekle, katılımcılara katıl; kaydolduktan sonra hemen
-            kullanmaya başla.
+            Etkinliğini ekle, yüzünle fotoğraflarını bul; kaydolduktan sonra
+            hemen kullanmaya başla.
           </p>
         </aside>
 

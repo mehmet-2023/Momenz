@@ -67,8 +67,6 @@ export type Event = {
   cover_url: string | null;
   image_count: number;
   face_count: number;
-  attendee_count: number;
-  is_attending: boolean;
   is_owner: boolean;
   created_at?: string | null;
 };

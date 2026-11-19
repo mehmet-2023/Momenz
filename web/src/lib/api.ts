@@ -221,16 +221,6 @@ export async function createEvent(payload: {
   return { event, jobId: response.headers.get("X-Job-ID") || "" };
 }
 
-export const joinEvent = (slug: string) =>
-  api<{ message: string }>(`/events/${encodeURIComponent(slug)}/join`, {
-    method: "POST",
-  });
-
-export const leaveEvent = (slug: string) =>
-  api<{ message: string }>(`/events/${encodeURIComponent(slug)}/join`, {
-    method: "DELETE",
-  });
-
 // ------------------------------------------------------------------ search
 /**
  * Yüz vektörünü D1'e dokunmadan alır. Tarayıcı bu vektörü benzerlik kontrolü

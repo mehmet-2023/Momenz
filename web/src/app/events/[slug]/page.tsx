@@ -6,28 +6,31 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import FaceSearch from "@/components/FaceSearch";
 import LoadingScreen from "@/components/LoadingScreen";
-import { useAuth } from "@/components/AuthProvider";
 import {
   ApiError,
+  createFolder,
   ensureCsrf,
   getEvent,
   getEventPhotos,
-  joinEvent,
-  leaveEvent,
+  getJob,
+  listFolders,
 } from "@/lib/api";
-import type { Event, EventPhoto } from "@/lib/types";
+import type { Event, EventPhoto, Job } from "@/lib/types";
+
+const TERMINAL = ["done", "failed", "canceled"];
 
 export default function EventDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
-  const { me } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [lightbox, setLightbox] = useState<EventPhoto | null>(null);
+  const [driveUrl, setDriveUrl] = useState("");
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateJob, setUpdateJob] = useState<Job | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +42,16 @@ export default function EventDetailPage() {
       ]);
       setEvent(item);
       setPhotos(gallery.items.slice(0, 8));
+      if (item.is_owner) {
+        try {
+          const folders = await listFolders();
+          setDriveUrl(
+            folders.find((folder) => folder.key === item.folder_key)?.url ?? "",
+          );
+        } catch {
+          setDriveUrl("");
+        }
+      }
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Etkinlik yüklenemedi.");
     } finally {
@@ -54,6 +67,41 @@ export default function EventDetailPage() {
     void load();
   }, [load]);
 
+  // /events/new aynı Drive linkini yakalayıp buraya yönlendirdiyse bilgi ver.
+  useEffect(() => {
+    if (window.sessionStorage.getItem("momenz:existing-event") === "1") {
+      window.sessionStorage.removeItem("momenz:existing-event");
+      setNotice("Bu Drive klasörü zaten bir etkinliğe bağlı. Yeni etkinlik oluşturulmadı.");
+    }
+  }, []);
+
+  // Artımlı indeksleme işinin durumunu izler; bitince sayıları yeniler.
+  useEffect(() => {
+    if (!updateJob || TERMINAL.includes(updateJob.status)) return;
+    let alive = true;
+    const timer = window.setInterval(async () => {
+      try {
+        const current = await getJob(updateJob.id);
+        if (!alive) return;
+        setUpdateJob(current);
+        if (TERMINAL.includes(current.status)) {
+          setNotice(
+            current.status === "done"
+              ? "Yeni fotoğraflar indexlendi. Etkinlik güncellendi."
+              : "Drive güncellemesi tamamlanamadı.",
+          );
+          if (current.status === "done") void load();
+        }
+      } catch {
+        // Geçici ağ hatası: bir sonraki yoklamada tekrar dene.
+      }
+    }, 4000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [updateJob?.id, updateJob?.status, load]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!lightbox) return;
     function onKey(e: KeyboardEvent) {
@@ -63,23 +111,27 @@ export default function EventDetailPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [lightbox]);
 
-  async function toggleJoin() {
-    if (!event) return;
-    setBusy(true);
+  async function refreshDrive() {
+    if (!driveUrl) {
+      setNotice("Drive bağlantısı bulunamadı.");
+      return;
+    }
+    setUpdateBusy(true);
     setNotice("");
     try {
-      if (event.is_attending) {
-        await leaveEvent(event.slug);
-        setNotice("Etkinlikten ayrıldın.");
-      } else {
-        await joinEvent(event.slug);
-        setNotice("Etkinliğe katıldın. Fotoğraflar artık senin de.");
-      }
-      await load();
+      // POST /folders yalnızca klasörü upsert eder ve 'index' job'u açar.
+      // 'reindex' açılmaz; zaten indexlenmiş fotoğraflar tekrar
+      // indirilmez/analiz edilmez, yalnızca yeni dosyalar taranır.
+      const { jobId } = await createFolder(driveUrl);
+      if (!jobId) throw new Error("İş başlatılamadı.");
+      setUpdateJob(await getJob(jobId));
+      setNotice("Drive taranıyor. Yeni fotoğraflar sırayla eklenecek.");
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "İşlem başarısız.");
+      setNotice(
+        cause instanceof ApiError ? cause.message : "Drive güncellemesi başlatılamadı.",
+      );
     } finally {
-      setBusy(false);
+      setUpdateBusy(false);
     }
   }
 
@@ -156,32 +208,40 @@ export default function EventDetailPage() {
           </div>
 
           <aside className="detail-aside init-seq">
-            <div className="aside-card">
-              <div className="aside-label">KATILIM</div>
-              {event.is_owner ? (
-                <div className="aside-owner">Bu etkinliği sen ekledin.</div>
-              ) : me ? (
+            {event.is_owner && (
+              <div className="aside-card">
+                <div className="aside-label">DRIVE'I GÜNCELLE</div>
+                <p className="aside-note">
+                  Klasöre sonradan eklenen fotoğraflar taranır. Zaten indexlenen
+                  kareler yeniden işlenmez.
+                </p>
                 <button
                   className="btn btn-primary"
                   type="button"
-                  onClick={toggleJoin}
-                  disabled={busy}
+                  onClick={refreshDrive}
+                  disabled={
+                    updateBusy ||
+                    !driveUrl ||
+                    (!!updateJob && !TERMINAL.includes(updateJob.status))
+                  }
+                  style={{ width: "100%" }}
                 >
-                  {busy
-                    ? "İşleniyor..."
-                    : event.is_attending
-                      ? "Katılımı bırak"
-                      : "Etkinliğe katıl"}
+                  {updateBusy
+                    ? "Başlatılıyor..."
+                    : updateJob && !TERMINAL.includes(updateJob.status)
+                      ? "Taranıyor..."
+                      : "Drive'ı güncelle"}
                 </button>
-              ) : (
-                <Link className="btn btn-primary" href="/login">
-                  Katılmak için giriş yap
-                </Link>
-              )}
-              <div className="aside-attendees">
-                <b>{event.attendee_count}</b> katılımcı
+                {updateJob && (
+                  <div className="meta">
+                    {updateJob.status.toUpperCase()} · %{Math.round(updateJob.progress * 100)}
+                    <div className="progress">
+                      <span style={{ width: `${Math.round(updateJob.progress * 100)}%` }} />
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             <div className="aside-card">
               <div className="aside-label">ETKİNLİK BİLGİLERİ</div>

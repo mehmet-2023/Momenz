@@ -204,7 +204,6 @@ export default function Home() {
                   <div className="featured-meta">
                     <span>{featured.image_count} FOTOĞRAF</span>
                     <span>{featured.face_count} YÜZ</span>
-                    <span>{featured.attendee_count} KATILIMCI</span>
                     <span className="featured-cta">KENDİNİ BUL →</span>
                   </div>
                 </div>
@@ -232,7 +231,7 @@ export default function Home() {
             <h3>Etkinliğini yayınla.</h3>
             <p>
               Fotoğrafların bulunduğu klasörü bağla, yüz tanımayı arka planda
-              çalıştır; katılımcılar kendi fotoğraflarını kolayca bulsun.
+              çalıştır; herkes kendi fotoğraflarını kolayca bulsun.
             </p>
           </div>
           <Link className="btn btn-primary" href={me ? "/events/new" : "/register"}>
