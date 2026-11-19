@@ -54,13 +54,10 @@ class TursoClient:
             raise TursoError("Turso auth token boş.")
         self._url = _pipeline_url(database_url)
         self._token = token
-        # requests ikili timeout'ta write süresini ayrı ayarlamıyor; tek değer
-        # connect/read/write için aynı üst sınırı garanti eder.
         self._timeout = float(timeout[1]) if timeout else 300.0
         self._max_retries = max(0, int(max_retries))
         self._local = threading.local()
 
-    # ------------------------------------------------------------- transport
 
     def _session(self) -> requests.Session:
         session = getattr(self._local, "session", None)
@@ -165,7 +162,6 @@ class TursoClient:
             time.sleep(delay)
         raise TursoError(str(last_error) or "Turso isteği başarısız.") from last_error
 
-    # ----------------------------------------------------------------- public
 
     def query(self, sql: str, params: Iterable[Any] | None = None) -> list[dict]:
         stmt: dict[str, Any] = {"sql": sql.strip()}
@@ -242,7 +238,6 @@ def _statement(sql: str, params: Iterable[Any] | None = None) -> dict[str, Any]:
     return item
 
 
-# Eski içe aktarmalar bozulmasın diye uyumluluk diğer adları.
 D1Client = TursoClient
 D1Error = TursoError
 

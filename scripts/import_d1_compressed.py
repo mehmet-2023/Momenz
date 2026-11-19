@@ -1,13 +1,4 @@
-"""Cloudflare D1 yedeğindeki drive_face_index'i sıkıştırılmış tek satıra çevirip Turso'ya yazar.
 
-    python scripts/import_d1_compressed.py [--dump PATH] [--only FOLDER_KEY] [--dry-run]
-
-Akış:
-  1) D1 SQL dump'ındaki 71.294 drive_face_index satırı geçici SQLite'a yüklenir.
-  2) Klasör başına tek ``files`` listesi oluşturulur; embedding'ler int8
-     ``matrix`` alanına nicemlenir, ``files``/``metas`` zlib ile sıkıştırılır.
-  3) Sonuç Turso ``folder_matrices`` tablosuna KLASÖR BAŞINA TEK INSERT ile yazılır.
-"""
 from __future__ import annotations
 
 import argparse

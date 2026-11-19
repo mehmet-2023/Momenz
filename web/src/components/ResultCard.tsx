@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import type { SearchResult } from "@/lib/types";
 
 export default function ResultCard({ result }: { result: SearchResult }) {

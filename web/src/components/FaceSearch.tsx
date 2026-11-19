@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import {
   useCallback,
   useEffect,
@@ -89,7 +88,6 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     };
   }, [stopCamera]);
 
-  // Sonuçlar önce hazırlanır, sonra paket paket açılır: hepsi birden patlamaz.
   useEffect(() => {
     const total = results?.results.length ?? 0;
     setVisibleCount(0);
@@ -165,7 +163,6 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
     try {
       const fingerprint = await fingerprintFile(file);
 
-      // 1) Aynı yüz + aynı etkinlik: 0 istek, 0 D1 okuması.
       const exact = await getCachedSearch(folderKey, fingerprint);
       if (exact) {
         setFromCache(true);
@@ -174,7 +171,6 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
         return;
       }
 
-      // 2) Vektörü D1'siz al; yalnızca BU etkinliğin önbelleğinde benzer ara.
       const embedding = await embedFace(file);
       const similar = embedding.length
         ? await findSimilarFace(folderKey, embedding)
@@ -188,7 +184,6 @@ export default function FaceSearch({ folderKey }: { folderKey: string }) {
         return;
       }
 
-      // 3) Yeni yüz: tek D1 sorgusuyla ara, sonra kalıcı önbelleğe yaz.
       const fresh = await searchFace(folderKey, file, undefined, embedding);
       const vector = embedding.length ? embedding : (fresh.query_embedding ?? []);
       await setCachedSearch(folderKey, fingerprint, vector, fresh);

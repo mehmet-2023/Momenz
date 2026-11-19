@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""Mevcut folder_matrices satırlarını sıkıştırılmış tek-satır formata çevirir.
-
-    python scripts/normalize_index_rows.py [--only FOLDER_KEY]
-
-Eski satırlarda ``files`` gömülü float32 embedding'ler içerir (~105 MB) ve
-``matrix`` float32'dir (~58 MB). Bu script her satırı TEK okuma + TEK yazım ile
-yeniden yazar: embedding'ler yalnızca int8 ``matrix`` alanında tutulur,
-``files``/``metas`` zlib ile sıkıştırılır ve embedding içermez.
-
-Idempotent: zaten yeni formatta olan satırlar atlanır. Geçici ağ
-kesilmelerinde satır başına yeniden denenir.
-"""
 from __future__ import annotations
 
 import argparse

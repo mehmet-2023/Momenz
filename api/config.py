@@ -22,29 +22,21 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ---------------------------------------------------------------- app
     app_name: str = "Momenz API"
     environment: str = "dev"
     debug: bool = False
     api_base_url: str = "https://momenz.onrender.com"
     web_base_url: str = "https://momenz.vercel.app"
-    # NoDecode: pydantic-settings bu alanları JSON sanıp çözmesin;
-    # virgülle ayrılmış env değerini _split_lists kendisi parselesin.
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["https://momenz.vercel.app"]
     )
 
-    # ---------------------------------------------------------------- Turso
-    # Cloudflare D1, row-read kotası dolduğu için source of truth Turso'ya
-    # taşındı. Eski D1 alanları yalnızca geri dönüş/uyumluluk için duruyor.
     turso_database_url: str = ""
     turso_auth_token: str = ""
     turso_timeout_connect: float = 10.0
-    # Klasör başına ~20 MB BLOB yazımı/okuması için geniş timeout.
     turso_timeout_read: float = 600.0
     turso_max_retries: int = 4
 
-    # Eski D1 ayarları (artık kullanılmaz; d1_config yine Turso döner).
     d1_account_id: str = ""
     d1_database_id: str = ""
     d1_api_token: str = ""
@@ -52,11 +44,8 @@ class Settings(BaseSettings):
     d1_timeout_read: float = 90.0
     d1_max_retries: int = 4
 
-    # ---------------------------------------------------------------- auth
     jwt_secret: str = "dev-only-change-this-secret"
     jwt_algorithm: str = "HS256"
-    # Oturum süresiz: kullanıcı çıkış yapmadıkça / şifresi değişmedikçe
-    # tekrar giriş yapmaz. (10 yıl, pratikte tarayıcı oturumu kadar kalıcı.)
     access_token_ttl_minutes: int = 60 * 24 * 365 * 10
     refresh_token_ttl_days: int = 365 * 10
     verification_ttl_hours: int = 24
@@ -67,7 +56,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_domain: str | None = None
     cookie_samesite: str = "lax"
-    login_rate_limit: int = 10  # dakikadaki deneme sayısı (IP + e-posta)
+    login_rate_limit: int = 10  
     trusted_hosts: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "momenz.onrender.com",
@@ -77,29 +66,21 @@ class Settings(BaseSettings):
     )
     hsts_max_age: int = 31_536_000
 
-    # ---------------------------------------------------------------- Google
     google_drive_api_key: str = ""
     google_service_account_json: str = ""
     google_credentials_file: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
 
-    # ---------------------------------------------------------------- search
-    # Render free 512 MB: klasör başına ~20 MB matris + metadata; tek klasör
-    # sıcak tutulur, diğer klasöre geçince eskisi derhal serbest bırakılır.
     search_cache_max_folders: int = 1
     search_default_threshold: float = 0.50
     search_max_results: int = 200
     preview_thumb_size: int = 384
 
-    # ---------------------------------------------------------------- jobs
     job_stale_minutes: int = 30
     job_poll_seconds: float = 2.0
     job_max_progress_writes: int = 200
 
-    # ---------------------------------------------------------------- mail
-    # Gmail SMTP (Resend kaldırıldı). Gmail App Password gerekir; normal hesap
-    # şifresi SMTP ile çalışmaz. 2FA açık olmalı.
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
@@ -110,7 +91,6 @@ class Settings(BaseSettings):
         "https://momenz.vercel.app/sifre-sifirla?token={token}"
     )
 
-    # ---------------------------------------------------------------- cache
     thumb_cache_dir: str = "/tmp/momenz_thumbs"
     thumb_cache_ttl_seconds: int = 86_400
 
@@ -123,7 +103,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_production_security(self) -> "Settings":
-        # Prod'da zayıf/placeholder secret ile açılış yapılmasın.
         if self.is_production:
             weak = {
                 "dev-only-change-this-secret",
@@ -188,7 +167,6 @@ class Settings(BaseSettings):
                     return info
             except (OSError, ValueError):
                 pass
-        # Yerel geliştirmede core.config zaten credentials.json'u okuyor.
         from core.config import get_service_account_info
 
         return get_service_account_info()

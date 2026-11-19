@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""folder_matrices tek satırlık index'ini doğrular (idempotent).
-
-    python scripts/backfill_turso.py
-
-Eski drive_face_index tablosu kaldırıldı; yeni klasörlerin satırını worker
-oluşturur. Bu script yalnızca mevcut satırların ``files`` alanının dolu
-olduğunu kontrol eder, eksikse worker'ın ilgili job'u çalıştırması gerekir.
-"""
 from __future__ import annotations
 
 import sys

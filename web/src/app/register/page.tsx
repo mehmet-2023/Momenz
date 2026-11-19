@@ -25,7 +25,6 @@ export default function RegisterPage() {
     setError("");
     try {
       await auth.register({ email, password, name: name || undefined });
-      // Doğrulama yok: kayıt anında oturum açılır, doğrudan etkinliklere dön.
       const result = await auth.login(email, password);
       setMe(result.user);
       router.push("/");

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Güvenli bir .env dosyası oluşturur (mevcut dosyayı ezmez).
-
-Kullanım:
-    python scripts/gen_env.py
-    python scripts/gen_env.py --force   # dikkat: mevcut .env yedeklenir
-"""
 from __future__ import annotations
 
 import argparse

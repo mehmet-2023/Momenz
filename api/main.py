@@ -55,8 +55,6 @@ async def lifespan(app: FastAPI):
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
 
-    # Bakım sorguları şemaya bağlıdır. Migration henüz uygulanmadıysa API yine
-    # de açılsın; health check yeşil kalsın ve sorun loglarda net görünsün.
     try:
         recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
         if recovered:
@@ -68,8 +66,6 @@ async def lifespan(app: FastAPI):
             exc,
         )
 
-    # Yüz modeli ilk aramada tembel olarak yüklenir (api.services.face).
-    # Böylece health check ve statik istekler 100+ MB model RAM'i harcamaz.
     yield
 
     db.close()
@@ -88,7 +84,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
-    # Dıştan içe doğru: TrustedHost en dışta olmalı (Host header injection).
     app.add_middleware(
         HealthExemptTrustedHostMiddleware, allowed_hosts=settings.trusted_hosts
     )
@@ -109,7 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
     app.add_middleware(RequestIdMiddleware)
 
-    app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(AppError, app_error_handler)  
     app.add_exception_handler(Exception, unhandled_error_handler)
 
     @app.exception_handler(RequestValidationError)
@@ -134,7 +129,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root() -> dict[str, str]:
-        # Render internal probe HEAD / kullanır; GET-only 405 döndürüyordu.
         return {"service": "momenz-api", "docs": "/docs"}
 
     @app.get("/health", response_model=HealthOut, tags=["system"])

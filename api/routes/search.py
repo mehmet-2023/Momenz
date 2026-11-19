@@ -25,9 +25,6 @@ from ..services.search import SearchService
 
 router = APIRouter(prefix="/search", tags=["search"])
 
-# 512 MB sınırında aynı anda birden fazla ağır iş matris/vektör üretirse OOM
-# olur. Tek semaphore hem embed hem search yolunu serileştirir: yüz motoru
-# tek örnek, matris de klasör başına tek kopya.
 _heavy_lock = threading.BoundedSemaphore(1)
 
 
@@ -92,7 +89,7 @@ def _parse_embedding(raw: str | None) -> np.ndarray | None:
     """
     if not raw:
         return None
-    if len(raw) > 8192:  # 128 float32 için ~2-3 KB yeterli
+    if len(raw) > 8192:  
         return None
     try:
         values = json.loads(raw)
@@ -174,8 +171,6 @@ async def search(
     user=Depends(optional_user),
 ) -> SearchOut:
     _search_limiter.check(_client_ip(request))
-    # Tek Turso isteği: yayın durumu + sürüm + yetki varsa matris BLOB'u.
-    # Yetkisiz kullanıcıya BLOB SQL tarafında verilmez (bkz. repository).
     owner_id = str(user.id) if user else ""
     is_public, version, matrix_data = index_repo.public_version_matrix(
         db, folder_key, owner_id
@@ -187,8 +182,6 @@ async def search(
     if matrix_data is None:
         raise Forbidden("Bu klasöre erişim iznin yok.")
 
-    # Tarayıcı benzerlik kontrolü için vektörü zaten hesaplattıysa görseli
-    # yeniden yüklemeye ve yüzü ikinci kez analiz etmeye gerek yok.
     probe = _parse_embedding(embedding)
     if probe is None:
         if file is None:
@@ -197,8 +190,6 @@ async def search(
         probe = await run_in_threadpool(_embed, data)
         del data
 
-    # 0 eşiği bütün 20 bin yüzü döndürür; istemci düşük eşikle veri
-    # sızdıramasın / yanıtı şişiremesin.
     if threshold is not None:
         threshold = min(1.0, max(0.5, threshold))
 

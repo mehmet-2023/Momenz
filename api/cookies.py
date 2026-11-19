@@ -36,8 +36,6 @@ def set_auth_cookies(
         max_age=refresh_max_age,
         **_common(settings),
     )
-    # CSRF token JS'in okuyabilmesi için httpOnly DEĞİL.
-    # Saldırgan bunu cross-origin okuyamaz (CORS + same-origin policy).
     response.set_cookie(
         settings.csrf_cookie_name,
         csrf_token,

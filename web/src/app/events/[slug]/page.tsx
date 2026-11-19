@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -67,7 +66,6 @@ export default function EventDetailPage() {
     void load();
   }, [load]);
 
-  // /events/new aynı Drive linkini yakalayıp buraya yönlendirdiyse hata göster.
   useEffect(() => {
     const title = window.sessionStorage.getItem("momenz:existing-event");
     if (title) {
@@ -78,7 +76,6 @@ export default function EventDetailPage() {
     }
   }, []);
 
-  // Artımlı indeksleme işinin durumunu izler; bitince sayıları yeniler.
   useEffect(() => {
     if (!updateJob || TERMINAL.includes(updateJob.status)) return;
     let alive = true;
@@ -96,14 +93,13 @@ export default function EventDetailPage() {
           if (current.status === "done") void load();
         }
       } catch {
-        // Geçici ağ hatası: bir sonraki yoklamada tekrar dene.
       }
     }, 4000);
     return () => {
       alive = false;
       window.clearInterval(timer);
     };
-  }, [updateJob?.id, updateJob?.status, load]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [updateJob?.id, updateJob?.status, load]); 
 
   useEffect(() => {
     if (!lightbox) return;
@@ -122,9 +118,6 @@ export default function EventDetailPage() {
     setUpdateBusy(true);
     setNotice("");
     try {
-      // POST /folders yalnızca klasörü upsert eder ve 'index' job'u açar.
-      // 'reindex' açılmaz; zaten indexlenmiş fotoğraflar tekrar
-      // indirilmez/analiz edilmez, yalnızca yeni dosyalar taranır.
       const { jobId } = await createFolder(driveUrl);
       if (!jobId) throw new Error("İş başlatılamadı.");
       setUpdateJob(await getJob(jobId));

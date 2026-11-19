@@ -23,7 +23,7 @@ class HealthExemptTrustedHostMiddleware(TrustedHostMiddleware):
     hâlâ kapalı; sadece /health ve / muaf.
     """
 
-    async def __call__(self, scope, receive, send) -> None:  # type: ignore[no-untyped-def]
+    async def __call__(self, scope, receive, send) -> None:  
         if scope["type"] == "http" and scope.get("path") in {"/health", "/"}:
             await self.app(scope, receive, send)
             return
@@ -39,7 +39,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, settings: Settings) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, app, settings: Settings) -> None:  
         super().__init__(app)
         self.settings = settings
 
@@ -79,7 +79,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     karşı koruma sağlar.
     """
 
-    def __init__(self, app, settings: Settings) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, app, settings: Settings) -> None:  
         super().__init__(app)
         self.settings = settings
 

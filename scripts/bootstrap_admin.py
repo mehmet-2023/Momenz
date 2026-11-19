@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""İlk yönetici hesabını oluşturur.
-
-    python scripts/bootstrap_admin.py admin@momenz.com
-
-Şifre MOMENZ_BOOTSTRAP_PASSWORD env'inden okunur; yoksa güvenli rastgele
-üretilir ve ekrana yazılır. Üretimde MOMENZ_ENVIRONMENT=prod olmalıdır.
-"""
 from __future__ import annotations
 
 import getpass

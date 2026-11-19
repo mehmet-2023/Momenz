@@ -35,7 +35,6 @@ function cookie(name: string): string | null {
 let csrfPromise: Promise<void> | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 
-/** CSRF cookie'sini oturum başına yalnızca bir kez alır (Vercel hit tasarrufu). */
 export function ensureCsrf(): Promise<void> {
   if (!csrfPromise) {
     csrfPromise = fetch(`${BASE}/auth/csrf`, { credentials: "include" })
@@ -47,10 +46,6 @@ export function ensureCsrf(): Promise<void> {
   return csrfPromise;
 }
 
-/**
- * Access token beklenmedik şekilde reddedilirse refresh cookie ile sessizce
- * yeniler. Paralel istekler tek refresh isteği paylaşır.
- */
 function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
@@ -106,7 +101,6 @@ export async function apiResponse(
     !["/auth/refresh", "/auth/login", "/auth/register"].includes(path) &&
     (await refreshSession())
   ) {
-    // Refresh CSRF cookie'sini döndürür; yeni token'ı headera koyup tekrarla.
     const refreshed = cookie(CSRF_COOKIE);
     if (refreshed) headers.set("X-CSRF-Token", refreshed);
     return apiResponse(path, options, false);
@@ -134,7 +128,6 @@ export async function api<T>(
   return parse<T>(await apiResponse(path, options));
 }
 
-// ------------------------------------------------------------------ auth
 export const auth = {
   me: () => api<User>("/auth/me"),
   login: (email: string, password: string) =>
@@ -161,7 +154,6 @@ export const auth = {
     }),
 };
 
-// ------------------------------------------------------------------ folders
 export async function listFolders(): Promise<Folder[]> {
   const data = await api<{ items: Folder[] }>("/folders");
   return data.items;
@@ -183,10 +175,8 @@ export function deleteFolder(key: string): Promise<{ message: string }> {
   return api(`/folders/${encodeURIComponent(key)}`, { method: "DELETE" });
 }
 
-// ------------------------------------------------------------------ jobs
 export const getJob = (id: string) => api<Job>(`/jobs/${id}`);
 
-// ------------------------------------------------------------------ events
 export type EventFilters = {
   upcoming?: boolean;
   q?: string;
@@ -221,11 +211,6 @@ export async function createEvent(payload: {
   return { event, jobId: response.headers.get("X-Job-ID") || "" };
 }
 
-// ------------------------------------------------------------------ search
-/**
- * Yüz vektörünü D1'e dokunmadan alır. Tarayıcı bu vektörü benzerlik kontrolü
- * için kullanır; eşleşme varsa /search hiç çağrılmaz.
- */
 export async function embedFace(file: File): Promise<number[]> {
   const form = new FormData();
   form.append("file", file);
@@ -244,14 +229,12 @@ export async function searchFace(
 ): Promise<SearchResponse> {
   const form = new FormData();
   form.append("folder_key", folderKey);
-  // Vektör zaten hesaplandıysa görseli tekrar yüklemeye/analiz etmeye gerek yok.
   if (embedding?.length) form.append("embedding", JSON.stringify(embedding));
   else if (file) form.append("file", file);
   if (threshold !== undefined) form.append("threshold", String(threshold));
   return api<SearchResponse>("/search", { method: "POST", body: form });
 }
 
-/** Eşleşen fotoğrafları seçilen çözünürlükte ZIP olarak indirir. */
 export async function downloadMatchesZip(
   folderKey: string,
   fileIds: string[],
@@ -284,8 +267,6 @@ export async function downloadMatchesZip(
   link.style.display = "none";
   document.body.appendChild(link);
   link.click();
-  // Tarayıcı indirmeyi asenkron başlatıyor; URL'i hemen iptal etmek
-  // dosyanın yarım/korrupt kaydedilmesine yol açıyordu.
   window.setTimeout(() => {
     link.remove();
     URL.revokeObjectURL(url);

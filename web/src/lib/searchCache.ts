@@ -1,17 +1,5 @@
 import type { SearchResponse } from "./types";
 
-/**
- * Yüz indeksi + arama sonuçları tarayıcıda IndexedDB'ye süresiz yazılır.
- *
- * - Aynı fotoğraf (bayt parmak izi aynı) -> 0 istek, 0 D1 okuması.
- * - Benzer yüz (kosinüs >= 0.78) -> yalnızca /search/embed (D1'siz), sonuç
- *   önbellekten gösterilir, 0 D1 okuması.
- * - Yeni yüz -> /search/embed + /search, sonra vektör ve sonuçlar saklanır.
- *
- * Klasör (etkinlik) anahtarı her kaydın içinde tutulur ve benzerlik araması
- * yalnızca o klasörün kayıtları arasında yapılır: etkinlikler birbirine
- * karışmaz. D1 her zaman source of truth'dur; önbellek yalnızca istemcidedir.
- */
 
 const DB_NAME = "momenz-face-cache";
 const STORE = "faces";
@@ -66,7 +54,6 @@ export function searchCacheKey(folderKey: string, fingerprint: string): string {
   return `${folderKey}::${fingerprint}`;
 }
 
-/** Görselin baytlarından parmak izi üretir; dosya adı/kamera zamanı önemli değil. */
 export async function fingerprintFile(file: File): Promise<string> {
   const bytes = await file.arrayBuffer();
   if (globalThis.crypto?.subtle) {
@@ -75,7 +62,6 @@ export async function fingerprintFile(file: File): Promise<string> {
       .map((part) => part.toString(16).padStart(2, "0"))
       .join("");
   }
-  // Güvenli olmayan bağlamda (http) WebCrypto yok; kaba ama yeterli anahtar.
   return `${file.size}-${file.lastModified}`;
 }
 
@@ -101,7 +87,6 @@ function toFloat32(values: number[] | Float32Array | ArrayLike<number>): Float32
   return Float32Array.from(values as ArrayLike<number>);
 }
 
-/** Exact hit: aynı yüz + aynı etkinlik. Sunucuya hiç istek gitmez. */
 export async function getCachedSearch(
   folderKey: string,
   fingerprint: string,
@@ -116,10 +101,6 @@ export async function getCachedSearch(
   });
 }
 
-/**
- * Aynı etkinlik içinde en benzer önbellek kaydını bulur.
- * threshold varsayılan 0.78 (~%78); 0.70-0.80 aralığı istenen davranış.
- */
 export async function findSimilarFace(
   folderKey: string,
   embedding: number[],
@@ -157,7 +138,6 @@ export async function findSimilarFace(
   return best;
 }
 
-/** Vektörü ve sonuçları süresiz kaydeder (aynı yüz tekrar gelirse üzerine yazar). */
 export async function setCachedSearch(
   folderKey: string,
   fingerprint: string,

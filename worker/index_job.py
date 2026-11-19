@@ -10,10 +10,6 @@ from typing import Any
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s | %(message)s")
 log = logging.getLogger("momenz.worker")
 
-# NOT: api/core importları fonksiyonların içinde yapılır. Modal CLI dosyayı
-# lokal olarak import edip `app` nesnesini arar; bu venv'de proje paketleri
-# kurulu olmadığı için importlar üst seviyede olmamalı. Modal görüntüsünün
-# içinde requirements-api.txt kurulu olduğundan çalışma zamanında sorun yok.
 
 
 def run_job(settings: Any, job: dict) -> dict[str, Any]:
@@ -41,13 +37,9 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
     folder_key = str(claimed["folder_key"])
     payload = claimed.get("payload") or {}
     try:
-        # Makinenin tüm çekirdeklerini kullan: her worker'ın kendi yüz motoru
-        # olsun (tek FaceEngine RLock ile analizi serileştiriyordu).
         cpu = max(1, min(8, os.cpu_count() or 4))
         yunet, sface = ensure_models()
         engine = FaceEnginePool(yunet, sface, size=cpu, num_threads=1)
-        # Klasörün tam face index'i TEK satırda: PgIndexStore okuma/yazmalarını
-        # bellekteki sözlüğe yapar; job sonunda OneRowStore.persist() ile 1 yazma.
         one_row = OneRowStore(db, folder_key)
         store = PgIndexStore(one_row, folder_key)
         client = get_drive_client(settings)
@@ -55,7 +47,6 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
         last_write = {"done": -1}
 
         def on_progress(done: int, total: int, skipped: int, counters: dict) -> None:
-            # D1'e her fotoğrafta yazma yapmayız; %5 veya 50 adım aralığı.
             if done == total or done - last_write["done"] >= 50:
                 last_write["done"] = done
                 job_repo.update_progress(
@@ -87,12 +78,9 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
             on_progress=on_progress,
         )
         store.flush()
-        # Fotoğraf sayısı Drive metadatasından gelsin: klasörde bulunan tüm
-        # görsellerin sayısı index sonunda drive_folders.meta'ya yazılır.
         total_found = int(summary.get("total_found") or 0)
         if total_found:
             store.set_meta("folder_count", str(total_found))
-        # Sürüm artışı ve tüm index/matris/metadata yazımı TEK SQL satırında.
         version = one_row.persist()
 
         counters = summary.get("counters") or {}
@@ -123,16 +111,11 @@ def poll_once(settings: Any) -> bool:
         recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
         if recovered:
             log.warning("%d yarım kalmış iş kuyruğa alındı.", recovered)
-        # Claim'i run_job içinde yapıyoruz; burada sadece aday id okuyoruz.
-        # Böylece iki worker aynı işi görse bile WHERE status='queued' koşulu
-        # (claim_by_id RETURNING) yalnızca birinin kazanmasını sağlar.
         candidate = db.query_one(
             "SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1"
         )
         if not candidate:
             return False
-        # run_job -> claim_by_id zaten tüm satırı RETURNING ile okur; ayrıca
-        # job_repo.get çağrısı gereksiz bir D1 okumasıydı.
         run_job(settings, {"id": str(candidate["id"])})
         return True
     finally:
@@ -162,17 +145,13 @@ def main() -> None:
             time.sleep(max(1.0, settings.job_poll_seconds))
 
 
-# ------------------------------------------------------------------ Modal
-try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
+try:  
     import modal
 
     modal_image = (
         modal.Image.debian_slim(python_version="3.12")
         .apt_install("libgl1", "libglib2.0-0")
         .pip_install_from_requirements("requirements-api.txt")
-        # add_local_* her zaman EN SON gelmeli: Modal bunları build sonrası
-        # mount eder; sonrasında bir build step gelirse deploy hata veriyor.
-        # api/ ve core/ /app altında; Python path'e eklemezsek import patlar.
         .workdir("/app")
         .env({"PYTHONPATH": "/app"})
         .add_local_dir("core", "/app/core")
@@ -181,7 +160,6 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
     modal_app = modal.App(
         "momenz-indexer", image=modal_image, secrets=[modal.Secret.from_name("momenz")]
     )
-    # Modal CLI `modal deploy worker/index_job.py` için standart isim.
     app = modal_app
 
     @modal_app.function(timeout=3600, cpu=8, memory=4096)
@@ -189,8 +167,6 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
         from api.config import get_settings
 
         settings = get_settings()
-        # claim_by_id tek UPDATE ... RETURNING ile hem atomik claim yapar hem
-        # tüm job alanlarını döner. Ayrı SELECT (1 D1 okuma) gereksizdi.
         return run_job(settings, {"id": job_id})
 
     @modal_app.function(schedule=modal.Period(minutes=1), timeout=120)
@@ -202,8 +178,6 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
         settings = get_settings()
         db = TursoClient(**settings.db_config)
         try:
-            # Önce COUNT(*) + sonra SELECT = iki D1 isteğiydi. Satır sayısı
-            # zaten elimizde; ikinci sorguyu kaldırdık.
             rows = db.query(
                 "SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 20"
             )
@@ -214,7 +188,7 @@ try:  # Modal kuruluysa serverless entrypoint'leri de tanımla.
         return {"queued": len(rows), "spawned": len(rows)}
 
 except ImportError:
-    modal_app = None  # type: ignore[assignment]
+    modal_app = None  
 
 
 if __name__ == "__main__":

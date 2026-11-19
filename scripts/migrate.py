@@ -1,17 +1,9 @@
-#!/usr/bin/env python3
-"""Turso şema migration'larını uygular (idempotent).
 
-    python scripts/migrate.py
-
-Ortam değişkenleri: MOMENZ_TURSO_DATABASE_URL / MOMENZ_TURSO_AUTH_TOKEN
-"""
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# `python scripts/migrate.py` ile doğrudan çalıştırıldığında proje root'u
-# sys.path'te olmaz; api/ paketini bulabilmek için ekle.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from api.config import get_settings
@@ -59,7 +51,6 @@ def main() -> None:
                 db.execute(statement)
             except Exception as exc:
                 message = str(exc).lower()
-                # ALTER sırasında kolon varsa geç (yarım kalmış migration).
                 if "duplicate column name" in message or "already exists" in message:
                     continue
                 raise SystemExit(f"{path.name}: {exc}\nSQL: {statement[:200]}")

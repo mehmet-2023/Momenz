@@ -13,7 +13,6 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ------------------------------------------------------------------ auth
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -26,7 +25,7 @@ class LoginIn(BaseModel):
 
 
 class RefreshIn(BaseModel):
-    refresh_token: str | None = None  # yoksa httpOnly cookie kullanılır
+    refresh_token: str | None = None  
 
 
 class PasswordResetIn(BaseModel):
@@ -57,7 +56,6 @@ class MessageOut(BaseModel):
     message: str
 
 
-# ------------------------------------------------------------------ folders
 class FolderOut(BaseModel):
     key: str
     title: str
@@ -81,7 +79,6 @@ class FolderListOut(BaseModel):
     total: int
 
 
-# ------------------------------------------------------------------ events
 class EventOut(BaseModel):
     id: str
     slug: str
@@ -90,7 +87,6 @@ class EventOut(BaseModel):
     folder_key: str
     owner_id: str | None = None
     cover_url: str | None = None
-    # Drive metadata'sından gelir; kullanıcı girmez.
     drive_uploaded_at: str | None = None
     date_label: str | None = None
     image_count: int = 0
@@ -99,13 +95,10 @@ class EventOut(BaseModel):
     is_attending: bool = False
     is_owner: bool = False
     is_public: bool = True
-    # Sisteme yüklenme tarihi (etkinlik kaydının oluşturulma anı).
     created_at: str | None = None
 
 
 class EventCreateIn(BaseModel):
-    # Kullanıcıdan istenen tek şey Drive klasör linkidir. Başlık, fotoğraf
-    # sayısı ve Drive yükleme tarihi klasör metadata'sından okunur.
     url: str = Field(min_length=10, max_length=1000)
     include_subfolders: bool = True
 
@@ -128,7 +121,6 @@ class EventPhotoListOut(BaseModel):
     total: int
 
 
-# ------------------------------------------------------------------ jobs
 class JobOut(BaseModel):
     id: str
     folder_key: str
@@ -148,7 +140,6 @@ class JobListOut(BaseModel):
     total: int
 
 
-# ------------------------------------------------------------------ search
 class SearchResultOut(BaseModel):
     file_id: str
     name: str
@@ -167,8 +158,6 @@ class SearchOut(BaseModel):
     count: int
     results: list[SearchResultOut]
     took_ms: float
-    # Tarayıcı bu vektörü IndexedDB'ye yazar; sonraki benzer yüzlerde sunucuya
-    # / D1'e hiç dokunmadan önbellek karşılaştırması yapılır.
     query_embedding: list[float] = Field(default_factory=list)
 
 
@@ -189,7 +178,6 @@ class BulkDownloadIn(BaseModel):
     size: int = Field(default=720, ge=320, le=2048)
 
 
-# ------------------------------------------------------------------ misc
 class HealthOut(BaseModel):
     status: str
     d1: bool

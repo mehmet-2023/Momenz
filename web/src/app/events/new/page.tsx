@@ -17,7 +17,6 @@ import type { Event, Job } from "@/lib/types";
 
 const TERMINAL = ["done", "failed", "canceled"];
 
-/** Drive linkinden klasör kimliği ve resource key çıkarır (backend regex'leriyle aynı). */
 function driveMeta(raw: string): { id: string; resourceKey: string | null } {
   const text = raw.trim();
   if (/^[-\w]{10,}$/.test(text)) return { id: text, resourceKey: null };
@@ -31,11 +30,6 @@ function driveMeta(raw: string): { id: string; resourceKey: string | null } {
   };
 }
 
-/**
- * Backend'in folder_key değerini tarayıcıda üretir:
- * sha1(`${folder_id}|${resource_key}|${include_subfolders}|${thumb_size}`)[:16]
- * Böylece klasör listesine ihtiyaç kalmadan doğrudan etkinlik eşleştirilir.
- */
 async function folderKeyFor(raw: string): Promise<string> {
   const { id, resourceKey } = driveMeta(raw);
   if (!id || !globalThis.crypto?.subtle) return "";
