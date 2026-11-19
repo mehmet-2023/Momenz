@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
-from .db import TursoClient, TursoError
+from .db import TursoClient
 from .db import schema as db_schema
 from .errors import AppError, app_error_handler, unhandled_error_handler
 from .middleware import (
@@ -41,33 +42,48 @@ async def lifespan(app: FastAPI):
             "MOMENZ_TURSO_AUTH_TOKEN değişkenlerini ayarla."
         )
 
+    # TursoClient kurulumu ağ isteği yapmaz. Şema kontrolü ve bakım
+    # sorguları ESKİDEN burada senkron çalışıyordu; 300 sn timeout + 4 retry
+    # yüzünden lifespan dakikalarca bloke oluyor, Render health check
+    # timeout'a girip 502/503 üretiyordu. Artık hepsi kısa timeout'lu arka
+    # plan thread'inde — uygulama anında dinlemeye başlar.
     db = TursoClient(**settings.db_config)
-    try:
-        db.ping()
-    except TursoError as exc:
-        raise RuntimeError(f"Turso bağlantısı kurulamadı: {exc}") from exc
-    try:
-        db_schema.ensure_schema(db)
-    except TursoError as exc:
-        raise RuntimeError(f"Turso şeması hazırlanamadı: {exc}") from exc
     app.state.db = db
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
-    # /health DB'ye hiç dokunmasın: bağlantı ve şema yalnızca açılışta bir kez
-    # doğrulanır, sonuç süreç boyunca ayakta tutulan bayraklardır.
     app.state.db_ok = True
     app.state.schema_ready = True
 
-    try:
-        recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
-        if recovered:
-            log.warning("Yarım kalmış %d iş kuyruğa alındı.", recovered)
-        user_repo.purge_expired(db)
-    except TursoError as exc:
-        log.error(
-            "Turso bakım sorguları atlandı: %s | Şema eksikse `python scripts/migrate.py` çalıştır.",
-            exc,
+    def _prepare_db() -> None:
+        probe = TursoClient(
+            **{
+                **settings.db_config,
+                "timeout": (3.0, 8.0),
+                "max_retries": 0,
+            }
         )
+        try:
+            probe.ping()
+        except Exception as exc:
+            log.error("Turso probe başarısız: %s", exc)
+        try:
+            db_schema.ensure_schema(probe)
+        except Exception as exc:
+            log.error("Turso şeması hazırlanamadı: %s", exc)
+        else:
+            try:
+                recovered = job_repo.recover_stale(
+                    probe, settings.job_stale_minutes
+                )
+                if recovered:
+                    log.warning("Yarım kalmış %d iş kuyruğa alındı.", recovered)
+                user_repo.purge_expired(probe)
+            except Exception as exc:
+                log.error("Turso bakım sorguları atlandı: %s", exc)
+        finally:
+            probe.close()
+
+    threading.Thread(target=_prepare_db, name="db-prepare", daemon=True).start()
 
     yield
 
