@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from .config import Settings, get_settings
 from .db import TursoClient, TursoError
 from .db import schema as db_schema
-from .deps import get_db
 from .errors import AppError, app_error_handler, unhandled_error_handler
 from .middleware import (
     CSRFMiddleware,
@@ -54,6 +53,10 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     app.state.user_cache = {}
     app.state.search = SearchService(settings)
+    # /health DB'ye hiç dokunmasın: bağlantı ve şema yalnızca açılışta bir kez
+    # doğrulanır, sonuç süreç boyunca ayakta tutulan bayraklardır.
+    app.state.db_ok = True
+    app.state.schema_ready = True
 
     try:
         recovered = job_repo.recover_stale(db, settings.job_stale_minutes)
@@ -132,25 +135,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"service": "momenz-api"}
 
     @app.get("/health", response_model=HealthOut, tags=["system"])
-    def health(db: TursoClient = Depends(get_db)):
-        try:
-            ok = db.ping()
-        except Exception:
-            ok = False
-        try:
-            # sqlite_master taraması 36 satır okuyordu; Render /health'i sürekli
-            # pollinglediği için tek satırlık bir varlık kontrolü yeterli.
-            # Lifespan'daki ensure_schema zaten tüm tabloları garanti ediyor.
-            db.query_one("SELECT 1 AS ok FROM folder_matrices LIMIT 1")
-            schema_ready = True
-        except Exception:
-            schema_ready = False
+    def health(request: Request) -> HealthOut:
+        # Saf liveness: DB'ye istek atmaz. Turso bağlantısı/şeması lifespan'ta
+        # bir kez doğrulanır; Render polling'i artık hiçbir satır okutmaz.
+        ok = bool(getattr(request.app.state, "db_ok", False))
         return HealthOut(
             status="ok" if ok else "degraded",
             d1=ok,
             environment=settings.environment,
             time=datetime.now(timezone.utc),
-            schema_ready=schema_ready,
+            schema_ready=bool(getattr(request.app.state, "schema_ready", False)),
         )
 
     prefix = "/api/v1"
