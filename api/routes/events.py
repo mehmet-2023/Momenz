@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 
 from core.image_utils import encode_jpeg_bytes
@@ -14,22 +15,48 @@ from core.zip_stream import stream_zip
 from ..config import Settings, get_settings
 from ..db import D1Client
 from ..deps import get_db, optional_user, require_user
-from ..errors import Forbidden, NotFound
+from ..errors import Forbidden, NotFound, RateLimited
+from ..ratelimit import InMemoryRateLimiter
 from ..repositories import events as repo
 from ..repositories import index as index_repo
 from ..schemas import (
     BulkDownloadIn,
     EventCreateIn,
+    EventDriveIn,
     EventListOut,
     EventOut,
     EventPhotoListOut,
     MessageOut,
+    ReminderIn,
 )
 from ..services import events as service
+from ..services import reminders as reminder_service
 from ..services.thumbnails import render_thumbnail
 
 router = APIRouter(prefix="/events", tags=["events"])
 public_router = APIRouter(prefix="/public", tags=["public"])
+
+# Hatırlatma spam'ini sınırla: IP başına dakikada 1, saatte 10; e-posta
+# başına dakikada 1 istek. Aynı e-posta aynı etkinliğe zaten bir kez yazılır.
+_reminder_ip_minute = InMemoryRateLimiter(max_events=1, window_seconds=60.0)
+_reminder_ip_hour = InMemoryRateLimiter(max_events=10, window_seconds=3600.0)
+_reminder_email_minute = InMemoryRateLimiter(max_events=1, window_seconds=60.0)
+
+
+def _client_ip(request: Request) -> str:
+    # Vercel ön yüzü istemci IP'sini X-Forwarded-For'un başına yazar;
+    # Render kendi atlama noktasını sona ekler. Baştaki geçerli IP'yi al.
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    for part in forwarded.split(","):
+        candidate = part.strip()
+        if not candidate:
+            continue
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        return candidate
+    return request.client.host if request.client else "unknown"
 
 
 @router.get("", response_model=EventListOut)
@@ -66,8 +93,40 @@ def create_event(
     user=Depends(require_user),
 ) -> EventOut:
     event, job_id = service.create_event(db, user.id, payload)
+    if job_id:
+        response.headers["X-Job-ID"] = job_id
+    return event
+
+
+@router.post("/{slug}/drive", response_model=EventOut)
+def attach_event_drive(
+    slug: str,
+    payload: EventDriveIn,
+    response: Response,
+    db: D1Client = Depends(get_db),
+    user=Depends(require_user),
+) -> EventOut:
+    event, job_id = service.attach_drive(db, user.id, slug, payload)
     response.headers["X-Job-ID"] = job_id
     return event
+
+
+@router.post("/{slug}/reminders", response_model=MessageOut)
+def subscribe_reminder(
+    slug: str,
+    payload: ReminderIn,
+    request: Request,
+    db: D1Client = Depends(get_db),
+) -> MessageOut:
+    ip = _client_ip(request)
+    email = str(payload.email).strip().lower()
+    if not _reminder_ip_minute.allows(ip):
+        raise RateLimited("Çok sık hatırlatma isteği gönderdin. Biraz bekle.")
+    if not _reminder_ip_hour.allows(ip):
+        raise RateLimited("Bu ağdan çok fazla hatırlatma isteği gönderildi.")
+    if not _reminder_email_minute.allows(email):
+        raise RateLimited("Bu e-posta ile çok sık istek gönderildi.")
+    return reminder_service.subscribe(db, slug, email)
 
 
 @router.get("/{slug}", response_model=EventOut)

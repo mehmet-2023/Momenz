@@ -5,11 +5,15 @@ import threading
 import time
 import unicodedata
 
+from core.config import DEFAULT_THUMB_SIZE, folder_key as make_folder_key
+from core.drive import parse_drive_folder_url
+
 from ..db import D1Client
-from ..errors import NotFound
+from ..errors import AppError, Conflict, Forbidden, NotFound, UpstreamError
 from ..repositories import events as repo
 from ..schemas import (
     EventCreateIn,
+    EventDriveIn,
     EventListOut,
     EventOut,
     EventPhotoListOut,
@@ -83,33 +87,129 @@ def get_event(db: D1Client, slug: str, viewer_id: str = "") -> EventOut:
     return EventOut(**row)
 
 
+def _folder_key(url: str, include_subfolders: bool) -> str:
+    try:
+        folder_id, resource_key = parse_drive_folder_url(url)
+    except Exception as exc:
+        raise UpstreamError(f"Drive klasör linki okunamadı: {exc}") from exc
+    return make_folder_key(
+        folder_id, resource_key, include_subfolders, DEFAULT_THUMB_SIZE
+    )
+
+
+def _duplicate_event(
+    db: D1Client, key: str, owner_id: str, exclude_id: str = ""
+) -> dict | None:
+    existing = repo.get_by_folder(db, key, owner_id)
+    if existing and str(existing.get("id") or "") != exclude_id:
+        return existing
+    return None
+
+
 def create_event(
     db: D1Client, owner_id: str, payload: EventCreateIn
 ) -> tuple[EventOut, str]:
-    folder, job_id = folder_service.create_folder(
-        db,
-        owner_id,
-        folder_service.FolderCreateIn(
-            url=payload.url,
-            include_subfolders=payload.include_subfolders,
-        ),
-    )
-    # Başlık Drive klasörünün adından gelir; kullanıcı bir şey yazmaz.
-    title = (folder.title or "").strip() or "Etkinlik"
+    url = (payload.url or "").strip()
+    description = (payload.description or "").strip()
+
+    if url:
+        key = _folder_key(url, payload.include_subfolders)
+        existing = _duplicate_event(db, key, owner_id)
+        if existing:
+            if existing.get("is_owner"):
+                raise Conflict(
+                    f"Bu Drive klasörü zaten “{existing['title']}” etkinliği "
+                    "olarak kayıtlı."
+                )
+            raise Conflict("Bu Drive klasörü zaten başka bir etkinliğe bağlı.")
+
+        folder, job_id = folder_service.create_folder(
+            db,
+            owner_id,
+            folder_service.FolderCreateIn(
+                url=url,
+                include_subfolders=payload.include_subfolders,
+            ),
+        )
+        # Başlık Drive klasörünün adından gelir; kullanıcı bir şey yazmaz.
+        title = (folder.title or "").strip() or "Etkinlik"
+        repo.create(
+            db,
+            event_id=new_id(),
+            slug=_slug(title),
+            owner_id=owner_id,
+            folder_key=folder.key,
+            title=title,
+            description=description,
+            event_date=payload.event_date,
+        )
+        created = repo.get_by_folder(db, folder.key, owner_id)
+        if not created:
+            raise RuntimeError("Etkinlik oluşturulamadı.")
+        invalidate_events_cache()
+        return EventOut(**created), job_id
+
+    # Drive henüz yüklenmedi: klasör anahtarı yerine geçici bir anahtar
+    # kullanılır. Fotoğraflar hazır olunca sahibi Drive linkini bağlar.
+    title = (payload.title or "").strip()
+    if not title:
+        raise AppError("Drive linki yoksa etkinlik adı gerekli.")
+    pending_key = f"pending-{new_id()}"
     repo.create(
         db,
         event_id=new_id(),
         slug=_slug(title),
         owner_id=owner_id,
-        folder_key=folder.key,
+        folder_key=pending_key,
         title=title,
-        description="",
+        description=description,
+        event_date=payload.event_date,
     )
-    created = repo.get_by_folder(db, folder.key, owner_id)
+    created = repo.get_by_folder(db, pending_key, owner_id)
     if not created:
         raise RuntimeError("Etkinlik oluşturulamadı.")
     invalidate_events_cache()
-    return EventOut(**created), job_id
+    return EventOut(**created), ""
+
+
+def attach_drive(
+    db: D1Client, owner_id: str, slug: str, payload: EventDriveIn
+) -> tuple[EventOut, str]:
+    event = repo.get_by_slug(db, slug, owner_id)
+    if not event:
+        raise NotFound("Etkinlik bulunamadı.")
+    if str(event.get("owner_id") or "") != owner_id:
+        raise Forbidden("Bu etkinliğe Drive bağlama iznin yok.")
+    if not event.get("drive_pending"):
+        raise Conflict("Bu etkinliğe zaten bir Drive klasörü bağlı.")
+
+    url = payload.url.strip()
+    key = _folder_key(url, payload.include_subfolders)
+    existing = _duplicate_event(db, key, owner_id, exclude_id=str(event["id"]))
+    if existing:
+        if existing.get("is_owner"):
+            raise Conflict(
+                f"Bu Drive klasörü zaten “{existing['title']}” etkinliği "
+                "olarak kayıtlı."
+            )
+        raise Conflict("Bu Drive klasörü zaten başka bir etkinliğe bağlı.")
+
+    folder, job_id = folder_service.create_folder(
+        db,
+        owner_id,
+        folder_service.FolderCreateIn(
+            url=url,
+            include_subfolders=payload.include_subfolders,
+        ),
+    )
+    if not repo.attach_folder(db, str(event["id"]), owner_id, folder.key):
+        raise Conflict("Drive bağlanamadı; etkinlik durumu değişmiş olabilir.")
+
+    invalidate_events_cache()
+    updated = repo.get_by_slug(db, slug, owner_id)
+    if not updated:
+        raise RuntimeError("Etkinlik güncellenemedi.")
+    return EventOut(**updated), job_id
 
 
 def join_event(db: D1Client, slug: str, user_id: str) -> bool:

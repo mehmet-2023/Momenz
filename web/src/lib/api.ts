@@ -200,7 +200,10 @@ export const getEventPhotos = (slug: string, limit = 24) =>
   api<EventPhotoList>(`/events/${encodeURIComponent(slug)}/photos?limit=${limit}`);
 
 export async function createEvent(payload: {
-  url: string;
+  url?: string;
+  title?: string;
+  description?: string;
+  event_date?: string;
   include_subfolders?: boolean;
 }): Promise<{ event: Event; jobId: string }> {
   const response = await apiResponse("/events", {
@@ -209,6 +212,28 @@ export async function createEvent(payload: {
   });
   const event = await parse<Event>(response);
   return { event, jobId: response.headers.get("X-Job-ID") || "" };
+}
+
+export async function attachEventDrive(
+  slug: string,
+  url: string,
+): Promise<{ event: Event; jobId: string }> {
+  const response = await apiResponse(`/events/${encodeURIComponent(slug)}/drive`, {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+  const event = await parse<Event>(response);
+  return { event, jobId: response.headers.get("X-Job-ID") || "" };
+}
+
+export function subscribeEventReminder(
+  slug: string,
+  email: string,
+): Promise<{ message: string }> {
+  return api(`/events/${encodeURIComponent(slug)}/reminders`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
 }
 
 export async function embedFace(file: File): Promise<number[]> {

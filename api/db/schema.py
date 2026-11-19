@@ -125,6 +125,17 @@ _STATEMENTS: tuple[str, ...] = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS event_attendees_user_idx ON event_attendees (user_id)",
+    """
+    CREATE TABLE IF NOT EXISTS event_reminders (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
+        email TEXT NOT NULL COLLATE NOCASE,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        notified_at TEXT,
+        UNIQUE (event_id, email)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS event_reminders_pending_idx ON event_reminders (event_id, notified_at)",
     # --- tek satırlık index --------------------------------------------------
     """
     CREATE TABLE IF NOT EXISTS folder_index_versions (

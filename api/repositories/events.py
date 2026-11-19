@@ -5,6 +5,7 @@ from typing import Any
 
 from ..db import D1Client
 from . import index as index_repo
+from .common import sql_now
 
 _SELECT = """
     SELECT e.*,
@@ -14,6 +15,9 @@ _SELECT = """
                AS attendee_count,
            (SELECT COUNT(*) FROM event_attendees a
             WHERE a.event_id = e.id AND a.user_id = ?) AS attending_flag,
+           (SELECT COUNT(*) FROM event_reminders r
+            WHERE r.event_id = e.id AND r.notified_at IS NULL)
+               AS reminder_count,
            COALESCE(
                NULLIF(json_extract(d.meta, '$.folder_count'), ''),
                m.images
@@ -41,14 +45,17 @@ def _date_label(value: str | None) -> str | None:
 def _to_out(row: dict, viewer_id: str = "") -> dict[str, Any]:
     folder_key = str(row.get("folder_key") or "")
     cover_id = str(row.get("cover_file_id") or row.get("first_file_id") or "")
+    is_owner = bool(viewer_id and str(row.get("owner_id") or "") == viewer_id)
+    date_value = row.get("drive_uploaded_at") or row.get("event_date")
     return {
         "id": str(row.get("id") or ""),
         "slug": str(row.get("slug") or ""),
         "title": str(row.get("title") or "Etkinlik"),
         "description": str(row.get("description") or ""),
         "drive_uploaded_at": row.get("drive_uploaded_at"),
-        "date_label": _date_label(row.get("drive_uploaded_at")),
+        "date_label": _date_label(date_value),
         "folder_key": folder_key,
+        "drive_pending": folder_key.startswith("pending-"),
         "owner_id": row.get("owner_id"),
         "cover_url": (
             f"/api/v1/public/folders/{folder_key}/photos/{cover_id}/thumb?size=320"
@@ -58,9 +65,10 @@ def _to_out(row: dict, viewer_id: str = "") -> dict[str, Any]:
         "image_count": int(row.get("image_count") or 0),
         "face_count": int(row.get("face_count") or 0),
         "attendee_count": int(row.get("attendee_count") or 0),
+        "reminder_count": int(row.get("reminder_count") or 0) if is_owner else 0,
         "is_attending": bool(int(row.get("attending_flag") or 0)),
         "is_public": bool(int(row.get("is_public") or 0)),
-        "is_owner": bool(viewer_id and str(row.get("owner_id") or "") == viewer_id),
+        "is_owner": is_owner,
         "created_at": row.get("created_at"),
     }
 
@@ -90,8 +98,9 @@ def list_all(
     # Drive yükleme tarihi (meta.folder_date) esas; sisteme eklenme tarihi
     # yalnızca Drive tarihi yoksa yedek olarak kullanılır. En yeni en üstte.
     sql += (
-        " ORDER BY COALESCE(json_extract(d.meta, '$.folder_date'), e.created_at) DESC,"
-        " e.created_at DESC"
+        " ORDER BY COALESCE("
+        "json_extract(d.meta, '$.folder_date'), e.event_date, e.created_at"
+        ") DESC, e.created_at DESC"
     )
     sql += " LIMIT ? OFFSET ?"
     params.extend([limit, offset])
@@ -149,13 +158,14 @@ def create(
     folder_key: str,
     title: str,
     description: str,
+    event_date: str | None = None,
 ) -> None:
     db.execute(
         """
         INSERT INTO events
-            (id, slug, owner_id, folder_key, title, description,
+            (id, slug, owner_id, folder_key, title, description, event_date,
              is_public, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
         """,
         (
             event_id,
@@ -164,10 +174,29 @@ def create(
             folder_key,
             title,
             description,
+            event_date,
         ),
     )
     # Arama tek matris satırını okuduğu için yayın bayrağını da orada tutuyoruz.
-    index_repo.set_matrix_public(db, folder_key, True)
+    if not folder_key.startswith("pending-"):
+        index_repo.set_matrix_public(db, folder_key, True)
+
+
+def attach_folder(
+    db: D1Client, event_id: str, owner_id: str, folder_key: str
+) -> bool:
+    """Bekleyen etkinliğe Drive klasörünü bağlar; eski anahtarı değiştirir."""
+    changes = db.execute(
+        """
+        UPDATE events
+        SET folder_key = ?, updated_at = ?
+        WHERE id = ? AND owner_id = ? AND folder_key LIKE 'pending-%'
+        """,
+        (folder_key, sql_now(), event_id, owner_id),
+    )
+    if changes:
+        index_repo.set_matrix_public(db, folder_key, True)
+    return changes > 0
 
 
 def join(db: D1Client, slug: str, user_id: str) -> bool:

@@ -84,6 +84,7 @@ class EventOut(BaseModel):
     title: str
     description: str = ""
     folder_key: str
+    drive_pending: bool = False
     owner_id: str | None = None
     cover_url: str | None = None
     drive_uploaded_at: str | None = None
@@ -91,6 +92,7 @@ class EventOut(BaseModel):
     image_count: int = 0
     face_count: int = 0
     attendee_count: int = 0
+    reminder_count: int = 0
     is_attending: bool = False
     is_owner: bool = False
     is_public: bool = True
@@ -98,8 +100,24 @@ class EventOut(BaseModel):
 
 
 class EventCreateIn(BaseModel):
+    """Drive linki varsa taranır; yoksa etkinlik hatırlatma modunda açılır."""
+
+    url: str | None = Field(default=None, max_length=1000)
+    title: str | None = Field(default=None, max_length=160)
+    description: str = Field(default="", max_length=2000)
+    event_date: str | None = Field(
+        default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"
+    )
+    include_subfolders: bool = True
+
+
+class EventDriveIn(BaseModel):
     url: str = Field(min_length=10, max_length=1000)
     include_subfolders: bool = True
+
+
+class ReminderIn(BaseModel):
+    email: EmailStr
 
 
 class EventListOut(BaseModel):

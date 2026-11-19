@@ -13,16 +13,22 @@ export default function EventCard({ event, view = "grid" }: Props) {
         {event.cover_url ? (
           <img src={event.cover_url} alt="" loading="lazy" decoding="async" />
         ) : (
-          <div className="event-cover-empty">KAPAK YOK</div>
+          <div className="event-cover-empty">
+            {event.drive_pending ? "FOTOĞRAF YAKINDA" : "KAPAK YOK"}
+          </div>
         )}
-        <span className="event-date-badge">{event.date_label || "TARİH YAKINDA"}</span>
+        <span className="event-date-badge">
+          {event.date_label || (event.drive_pending ? "YAKINDA" : "TARİH YAKINDA")}
+        </span>
       </div>
       <div className="event-card-body">
         <div className="event-card-title">{event.title}</div>
         <div className="event-card-meta">
-          {event.date_label
-            ? `${event.date_label} · Drive yükleme`
-            : "Drive'dan yüklendi"}
+          {event.drive_pending
+            ? "Fotoğraflar yakında · Hatırlatma açık"
+            : event.date_label
+              ? `${event.date_label} · Drive yükleme`
+              : "Drive'dan yüklendi"}
         </div>
         {event.description && view === "list" && (
           <p className="event-card-desc">{event.description}</p>

@@ -675,6 +675,61 @@ textarea.input { min-height: 120px; resize: vertical; }
 .fact-list dt { color: var(--muted); font-family: var(--font-mono), monospace; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; }
 .fact-list dd { margin: 0; text-align: right; }
 .aside-note { color: var(--muted); font-size: .74rem; line-height: 1.5; margin: 12px 0 0; }
+.attach-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.attach-form .input { font-size: .74rem; }
+.reminder-total {
+  font-family: var(--font-mono), monospace; font-weight: 700;
+  font-size: 2rem; line-height: 1; letter-spacing: -.05em;
+}
+
+/* ------------------------------------------------ pending event / reminder */
+.pending-panel {
+  border: 1px solid var(--line); border-top: 0; background: var(--paper);
+  padding: 34px 28px; margin-bottom: 34px;
+}
+.pending-title {
+  font-family: var(--font-mono), monospace; font-weight: 700;
+  font-size: clamp(1.5rem, 3.2vw, 2.2rem); line-height: 1.08;
+  letter-spacing: -.06em; margin: 8px 0 12px;
+}
+.pending-lead {
+  color: var(--muted); font-size: .9rem; line-height: 1.6;
+  max-width: 620px; margin: 0 0 26px;
+}
+.reminder-form { max-width: 620px; }
+.reminder-row { display: flex; gap: 0; }
+.reminder-row .input { border-right: 0; }
+.reminder-submit {
+  flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--ink);
+  padding: 0 20px;
+}
+.reminder-note {
+  color: var(--muted); font-size: .72rem; line-height: 1.5;
+  margin: 10px 0 0; max-width: 560px;
+}
+.reminder-waiting { color: var(--ink); font-weight: 700; }
+.reminder-done {
+  display: flex; gap: 14px; align-items: flex-start;
+  border: 1px solid var(--ink); padding: 18px 20px; max-width: 620px;
+}
+.reminder-mark {
+  flex: 0 0 auto; width: 26px; height: 26px; display: flex;
+  align-items: center; justify-content: center; border: 1px solid var(--ink);
+  font-family: var(--font-mono), monospace; font-size: .8rem; line-height: 1;
+}
+.reminder-done b {
+  font-family: var(--font-mono), monospace; font-size: .68rem;
+  letter-spacing: .14em; display: block; margin-bottom: 5px;
+}
+.reminder-done p { color: var(--muted); font-size: .78rem; line-height: 1.5; margin: 0; }
+
+/* ------------------------------------------------------ event create modes */
+.event-mode {
+  display: inline-flex; border: 1px solid var(--line); margin-bottom: 22px;
+  background: var(--paper);
+}
+.event-mode .chip { border: 0; border-right: 1px solid var(--line); }
+.event-mode .chip:last-child { border-right: 0; }
 
 .lightbox {
   position: fixed; inset: 0; z-index: 100; background: rgba(10,10,10,.94);
@@ -709,7 +764,10 @@ textarea.input { min-height: 120px; resize: vertical; }
 }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .card { border: 1px solid var(--line); background: var(--paper); padding: 14px; }
-.result-img { width: 100%; display: block; aspect-ratio: 4 / 3; object-fit: cover; background: var(--soft); }
+.result-img {
+  width: 100%; display: block; height: 300px; object-fit: contain;
+  object-position: center; background: var(--soft);
+}
 .score { font-family: var(--font-mono), monospace; font-size: .88rem; font-weight: 700; }
 .result-actions { display: flex; gap: 6px; margin-top: 10px; }
 .result-actions a { flex: 1; text-align: center; }
@@ -1003,6 +1061,7 @@ textarea.input { min-height: 120px; resize: vertical; }
   .console-body { grid-template-columns: 1fr; }
   .face-stage-grid { grid-template-columns: 1fr; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .result-img { height: 250px; }
   .face-input-panel { border-right: 0; border-bottom: 1px solid var(--line); }
   .scan-stage { border-right: 0; border-bottom: 1px solid var(--line); min-height: 240px; }
   .auto-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1057,6 +1116,7 @@ textarea.input { min-height: 120px; resize: vertical; }
   .results-download .btn { flex: 1; }
   .face-results { margin-top: 16px; padding-top: 14px; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .result-img { height: 190px; }
   .grid .card { padding: 9px; }
   .grid .score { font-size: .76rem; margin-top: 7px !important; }
   .grid .meta { font-size: .62rem; line-height: 1.35; margin: 3px 0 0 !important; }
@@ -1065,5 +1125,11 @@ textarea.input { min-height: 120px; resize: vertical; }
   .results-modal { padding: 16px; }
   .results-modal-card { padding: 20px 18px; box-shadow: 5px 5px 0 rgba(0, 0, 0, .22); }
   .results-modal-title { margin-bottom: 14px; }
+  .pending-panel { padding: 24px 18px; }
+  .reminder-row { flex-direction: column; }
+  .reminder-row .input { border-right: 1px solid var(--line); border-bottom: 0; }
+  .reminder-submit { width: 100%; padding: 12px; }
+  .event-mode { display: flex; width: 100%; }
+  .event-mode .chip { flex: 1; padding-left: 6px; padding-right: 6px; }
   .face-drop, .face-camera, .face-camera video { min-height: 230px; height: 230px; }
 }

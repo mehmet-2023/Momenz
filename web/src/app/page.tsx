@@ -198,9 +198,13 @@ export default function Home() {
                       decoding="async"
                     />
                   ) : (
-                    <div className="featured-placeholder">KAPAK YOK</div>
+                    <div className="featured-placeholder">
+                      {featured.drive_pending ? "FOTOĞRAF YAKINDA" : "KAPAK YOK"}
+                    </div>
                   )}
-                  <span className="featured-tag">ETKİNLİK</span>
+                  <span className="featured-tag">
+                    {featured.drive_pending ? "HATIRLATMA AÇIK" : "ETKİNLİK"}
+                  </span>
                 </div>
                 <div className="featured-body">
                   <div className="eyebrow">{featured.date_label || "TARİH YAKINDA"}</div>
@@ -209,7 +213,9 @@ export default function Home() {
                   <div className="featured-meta">
                     <span>{featured.image_count} FOTOĞRAF</span>
                     <span>{featured.face_count} YÜZ</span>
-                    <span className="featured-cta">KENDİNİ BUL →</span>
+                    <span className="featured-cta">
+                      {featured.drive_pending ? "HATIRLATMAYA KATIL →" : "KENDİNİ BUL →"}
+                    </span>
                   </div>
                 </div>
               </Link>

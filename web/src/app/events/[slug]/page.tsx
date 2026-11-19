@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import EventReminder from "@/components/EventReminder";
 import FaceSearch from "@/components/FaceSearch";
 import LoadingScreen from "@/components/LoadingScreen";
 import {
   ApiError,
+  attachEventDrive,
   createFolder,
   ensureCsrf,
   getEvent,
@@ -28,6 +30,7 @@ export default function EventDetailPage() {
   const [notice, setNotice] = useState("");
   const [lightbox, setLightbox] = useState<EventPhoto | null>(null);
   const [driveUrl, setDriveUrl] = useState("");
+  const [attachUrl, setAttachUrl] = useState("");
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateJob, setUpdateJob] = useState<Job | null>(null);
 
@@ -131,6 +134,29 @@ export default function EventDetailPage() {
     }
   }
 
+  async function attachDrive(e: FormEvent) {
+    e.preventDefault();
+    const clean = attachUrl.trim();
+    if (!clean) return;
+    setUpdateBusy(true);
+    setNotice("");
+    try {
+      const { event: updated, jobId } = await attachEventDrive(slug, clean);
+      setEvent(updated);
+      setAttachUrl("");
+      if (jobId) setUpdateJob(await getJob(jobId));
+      setNotice("Drive bağlandı. Fotoğraflar sırayla taranacak.");
+    } catch (cause) {
+      setNotice(
+        cause instanceof ApiError
+          ? cause.message
+          : "Drive bağlanamadı. Linki kontrol edip tekrar dene.",
+      );
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -165,14 +191,45 @@ export default function EventDetailPage() {
             <div className="detail-hero-strip init-seq">
               <div className="eyebrow">{event.date_label || "TARİH YAKINDA"}</div>
               <h1>{event.title}</h1>
+              {event.description && (
+                <p className="detail-desc">{event.description}</p>
+              )}
               <div className="detail-strip-meta">
                 <span>{event.image_count} FOTOĞRAF</span>
                 <span>{event.face_count} YÜZ</span>
-                <span>YÜZ TANIMA AKTİF</span>
+                <span>
+                  {event.drive_pending
+                    ? "DRIVE BEKLENİYOR"
+                    : event.image_count > 0
+                      ? "YÜZ TANIMA AKTİF"
+                      : "TARAMA SÜRÜYOR"}
+                </span>
               </div>
             </div>
 
-            <FaceSearch folderKey={event.folder_key} />
+            {event.image_count > 0 ? (
+              <FaceSearch folderKey={event.folder_key} />
+            ) : (
+              <section className="pending-panel init-seq">
+                <div className="eyebrow">
+                  {event.drive_pending ? "01 / HATIRLATMA" : "01 / HAZIRLANIYOR"}
+                </div>
+                <h2 className="pending-title">
+                  {event.drive_pending
+                    ? "Fotoğraflar henüz yüklenmedi."
+                    : "Fotoğraflar hazırlanıyor."}
+                </h2>
+                <p className="pending-lead">
+                  {event.drive_pending
+                    ? "Drive klasörü bağlandığında tüm kareler taranacak ve yüzünü arayabileceksin. Hazır olduğunda haber vermemizi istersen e-postanı bırak."
+                    : "Drive klasörü bağlı; yüz tanıma sırası devam ediyor. Bitince bu sayfa otomatik olarak açılacak."}
+                </p>
+                <EventReminder
+                  slug={event.slug}
+                  waiting={event.is_owner ? event.reminder_count : 0}
+                />
+              </section>
+            )}
 
             <section className="gallery-section init-seq">
               <div className="section-head compact">
@@ -209,7 +266,36 @@ export default function EventDetailPage() {
           </div>
 
           <aside className="detail-aside init-seq">
-            {event.is_owner && (
+            {event.is_owner && event.drive_pending && (
+              <div className="aside-card">
+                <div className="aside-label">DRIVE'I BAĞLA</div>
+                <p className="aside-note">
+                  Fotoğraflar hazır olduğunda klasör linkini buradan ekle.
+                  Tarama hemen başlar; sayfa kendini günceller.
+                </p>
+                <form className="attach-form" onSubmit={attachDrive}>
+                  <input
+                    className="input"
+                    type="url"
+                    required
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={attachUrl}
+                    onChange={(e) => setAttachUrl(e.target.value)}
+                    aria-label="Drive klasör linki"
+                  />
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    disabled={updateBusy || !attachUrl.trim()}
+                    style={{ width: "100%" }}
+                  >
+                    {updateBusy ? "Bağlanıyor..." : "Drive'ı bağla"}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {event.is_owner && !event.drive_pending && (
               <div className="aside-card">
                 <div className="aside-label">DRIVE'I GÜNCELLE</div>
                 <p className="aside-note">
@@ -244,11 +330,29 @@ export default function EventDetailPage() {
               </div>
             )}
 
+            {event.is_owner && event.reminder_count > 0 && (
+              <div className="aside-card">
+                <div className="aside-label">HATIRLATMA LİSTESİ</div>
+                <div className="reminder-total">{event.reminder_count}</div>
+                <p className="aside-note">
+                  kişi fotoğraflar yüklendiğinde haber verilmesini bekliyor.
+                  Drive bağlanıp tarama bitince tek seferlik e-posta gider.
+                </p>
+              </div>
+            )}
+
             <div className="aside-card">
               <div className="aside-label">ETKİNLİK BİLGİLERİ</div>
               <dl className="fact-list">
                 <div><dt>Tarih</dt><dd>{event.date_label || "—"}</dd></div>
-                <div><dt>Drive yükleme</dt><dd>{event.date_label || "—"}</dd></div>
+                <div>
+                  <dt>Drive yükleme</dt>
+                  <dd>
+                    {event.drive_pending
+                      ? "Henüz yüklenmedi"
+                      : event.date_label || "—"}
+                  </dd>
+                </div>
                 <div>
                   <dt>Sisteme yükleme</dt>
                   <dd>

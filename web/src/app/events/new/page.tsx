@@ -67,7 +67,11 @@ export default function NewEventPage() {
   const router = useRouter();
   const { me, loading: authLoading } = useAuth();
 
+  const [mode, setMode] = useState<"drive" | "pending">("drive");
   const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [description, setDescription] = useState("");
   const [job, setJob] = useState<Job | null>(null);
   const [event, setEvent] = useState<Event | null>(null);
   const [error, setError] = useState("");
@@ -114,10 +118,21 @@ export default function NewEventPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     const clean = url.trim();
-    if (!clean) return;
+    if (mode === "drive" && !clean) return;
+    if (mode === "pending" && !title.trim()) return;
     setBusy(true);
     setError("");
     try {
+      if (mode === "pending") {
+        const created = await createEvent({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          event_date: eventDate || undefined,
+        });
+        router.push(`/events/${created.event.slug}`);
+        return;
+      }
+
       // Aynı Drive klasörü daha önce etkinliğe bağlandıysa yeni etkinlik
       // açma; kullanıcıyı mevcut etkinliğe yönlendir. Kontrol başarısız olursa
       // normal oluşturma akışına devam et.
@@ -180,6 +195,9 @@ export default function NewEventPage() {
     setJob(null);
     setEvent(null);
     setUrl("");
+    setTitle("");
+    setEventDate("");
+    setDescription("");
     setError("");
     setStartedAt(null);
   }
@@ -242,54 +260,162 @@ export default function NewEventPage() {
               <h1 className="section-title">Etkinliği bağla.</h1>
             </div>
             <p className="section-lead">
-              Tek bir Drive linki. Başlık, fotoğraf sayısı ve yükleme tarihi
-              klasörden otomatik okunur; sen sadece yüz tanımanın başlamasını beklersin.
+              Drive linkin hazırsa tara; değilse etkinliği şimdi aç, fotoğraflar
+              yüklenince linki ekle. Ziyaretçiler e-posta bırakıp haber alabilir.
             </p>
           </div>
 
           <div className="link-panel init-seq">
-            <div className="link-panel-head">
-              <span className="step-no">01</span>
-              <div>
-                <div className="step-title">Drive klasörünün linki</div>
-                <div className="step-desc">
-                  Klasör &quot;Bağlantıya sahip herkes&quot; olarak paylaşılmalı.
-                  Başka bir şey girmene gerek yok.
-                </div>
-              </div>
+            <div className="event-mode" role="tablist" aria-label="Drive durumu">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "drive"}
+                className={`chip${mode === "drive" ? " active" : ""}`}
+                onClick={() => {
+                  setMode("drive");
+                  setError("");
+                }}
+              >
+                DRIVE LİNKİ VAR
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "pending"}
+                className={`chip${mode === "pending" ? " active" : ""}`}
+                onClick={() => {
+                  setMode("pending");
+                  setError("");
+                }}
+              >
+                DRIVE HENÜZ YOK
+              </button>
             </div>
 
-            <form onSubmit={submit}>
-              {error && <div className="alert alert-error">{error}</div>}
-              <div className="link-field">
-                <span className="link-prefix" aria-hidden="true">⌖</span>
-                <input
-                  className="link-input"
-                  type="url"
-                  required
-                  autoFocus
-                  placeholder="https://drive.google.com/drive/folders/..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  aria-label="Drive klasör linki"
-                />
-                <button className="btn btn-primary link-submit" type="submit" disabled={busy || !url.trim()}>
-                  {busy ? "Bağlanıyor..." : "Taramayı başlat →"}
+            {error && <div className="alert alert-error">{error}</div>}
+
+            {mode === "drive" ? (
+              <form onSubmit={submit}>
+                <div className="link-panel-head">
+                  <span className="step-no">01</span>
+                  <div>
+                    <div className="step-title">Drive klasörünün linki</div>
+                    <div className="step-desc">
+                      Klasör &quot;Bağlantıya sahip herkes&quot; olarak paylaşılmalı.
+                      Başka bir şey girmene gerek yok.
+                    </div>
+                  </div>
+                </div>
+                <div className="link-field">
+                  <span className="link-prefix" aria-hidden="true">⌖</span>
+                  <input
+                    className="link-input"
+                    type="url"
+                    required
+                    autoFocus
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    aria-label="Drive klasör linki"
+                  />
+                  <button className="btn btn-primary link-submit" type="submit" disabled={busy || !url.trim()}>
+                    {busy ? "Bağlanıyor..." : "Taramayı başlat →"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={submit}>
+                <div className="link-panel-head">
+                  <span className="step-no">01</span>
+                  <div>
+                    <div className="step-title">Etkinlik bilgileri</div>
+                    <div className="step-desc">
+                      Drive klasörü henüz hazır değilse etkinliği bu bilgilerle
+                      aç. Fotoğraflar yüklenince linki etkinlik sayfasından
+                      bağlayacaksın.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="label" htmlFor="event-title">ETKİNLİK ADI</label>
+                  <input
+                    id="event-title"
+                    className="input"
+                    type="text"
+                    required
+                    maxLength={160}
+                    autoFocus
+                    placeholder="Örn. Amal II Değişim Çalıştayı"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-grid">
+                  <div className="field">
+                    <label className="label" htmlFor="event-date">
+                      TARİH <span className="optional">(isteğe bağlı)</span>
+                    </label>
+                    <input
+                      id="event-date"
+                      className="input"
+                      type="date"
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="field full">
+                    <label className="label" htmlFor="event-description">
+                      AÇIKLAMA <span className="optional">(isteğe bağlı)</span>
+                    </label>
+                    <textarea
+                      id="event-description"
+                      className="input"
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Etkinlik hakkında kısa bir not..."
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={busy || !title.trim()}
+                  style={{ width: "100%" }}
+                >
+                  {busy ? "OLUŞTURULUYOR..." : "ETKİNLİĞİ OLUŞTUR →"}
                 </button>
-              </div>
-            </form>
+              </form>
+            )}
 
             <div className="auto-grid init-seq">
-              <div><b>BAŞLIK</b><span>Drive klasör adı</span></div>
-              <div><b>FOTOĞRAF</b><span>Klasörden sayılır</span></div>
-              <div><b>YÜKLEME TARİHİ</b><span>Drive metadata</span></div>
-              <div><b>THUMBNAIL</b><span>Otomatik üretilir</span></div>
+              {mode === "drive" ? (
+                <>
+                  <div><b>BAŞLIK</b><span>Drive klasör adı</span></div>
+                  <div><b>FOTOĞRAF</b><span>Klasörden sayılır</span></div>
+                  <div><b>YÜKLEME TARİHİ</b><span>Drive metadata</span></div>
+                  <div><b>THUMBNAIL</b><span>Otomatik üretilir</span></div>
+                </>
+              ) : (
+                <>
+                  <div><b>BAŞLIK</b><span>Sen belirle</span></div>
+                  <div><b>TARİH</b><span>İsteğe bağlı</span></div>
+                  <div><b>HATIRLATMA</b><span>E-posta toplanır</span></div>
+                  <div><b>DRIVE</b><span>Sonra bağlanır</span></div>
+                </>
+              )}
             </div>
           </div>
 
           <div className="aside-note new-note">
-            İpucu: Etkinlikten sonra klasöre yeni fotoğraf eklersen tekrar taramayı
-            başlatman yeterli; yüzler güncellenir.
+            {mode === "drive"
+              ? "İpucu: Etkinlikten sonra klasöre yeni fotoğraf eklersen tekrar taramayı başlatman yeterli; yüzler güncellenir."
+              : "Drive linkini sonradan etkinlik sayfasındaki “Drive'ı bağla” alanından ekleyebilirsin. O zamana kadar hatırlatma listesi açık kalır."}
           </div>
         </>
       ) : (

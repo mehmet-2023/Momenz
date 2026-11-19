@@ -92,6 +92,17 @@ def run_job(settings: Any, job: dict) -> dict[str, Any]:
             "version": version,
         }
         job_repo.finish(db, str(claimed["id"]), worker_id, result)
+        if total_found:
+            # Job "done" olduktan sonra hatırlatma listesine tek seferlik
+            # haber ver. Mail hatası job'u başarısız göstermez; kayıt
+            # notified_at ile işaretlenmediği için sonraki taramada tekrar
+            # denenir.
+            try:
+                from api.services.reminders import notify_ready
+
+                notify_ready(db, settings, folder_key)
+            except Exception:
+                log.exception("Hatırlatma mailleri gönderilemedi: %s", folder_key)
         log.info("Job %s bitti: %s", claimed["id"], result)
         return {"status": "done", **result}
     except Exception as exc:

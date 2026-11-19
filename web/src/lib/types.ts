@@ -64,9 +64,11 @@ export type Event = {
   drive_uploaded_at: string | null;
   date_label: string | null;
   folder_key: string;
+  drive_pending: boolean;
   cover_url: string | null;
   image_count: number;
   face_count: number;
+  reminder_count: number;
   is_owner: boolean;
   created_at?: string | null;
 };
