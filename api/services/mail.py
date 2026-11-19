@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import smtplib
 import ssl
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 
 from ..config import Settings
@@ -10,20 +13,79 @@ from ..config import Settings
 log = logging.getLogger("momenz.mail")
 
 
-def send_mail(settings: Settings, to: str, subject: str, body: str) -> bool:
-    """Gmail SMTP ile mail gönderir (STARTTLS, 587).
+def _send_webhook(settings: Settings, to: str, subject: str, body: str) -> bool:
+    """HTTPS mail köprüsüne (Google Apps Script) istek gönderir.
 
-    Resend kaldırıldı. Gmail App Password kullanılır; kota günlük ~500
-    (bireysel) / ~2000 (Workspace) olduğu için kayıt doğrulama maili
-    gönderilmez, yalnızca 'şifremi unuttum' akışı kullanılır.
-
-    Prod'da SMTP ayarları yoksa fail-closed: sıfırlama bağlantısı gönderilmez.
-    Geliştirmede ayar yoksa konsola yazar.
+    Render free web servisleri 25/465/587 portlarını kapattığı için SMTP
+    üretimde çalışmaz. Apps Script köprüsü Gmail hesabından gönderir ve
+    yalnızca HTTPS (443) kullanır.
     """
+    url = settings.mail_webhook_url.strip()
+    secret = settings.mail_webhook_secret.strip()
+    if not url or not secret:
+        log.error(
+            "MOMENZ_MAIL_WEBHOOK_URL ve MOMENZ_MAIL_WEBHOOK_SECRET birlikte "
+            "tanımlanmalı; mail gönderilemedi: %s",
+            to,
+        )
+        return False
+    if not url.startswith("https://"):
+        log.error("Mail webhook URL'i https:// ile başlamalı: %s", url)
+        return False
+
+    payload = json.dumps(
+        {"secret": secret, "to": to, "subject": subject, "body": body}
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "Momenz/1.0",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request, timeout=settings.mail_webhook_timeout
+        ) as response:
+            raw = response.read(4096).decode("utf-8", "replace")
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+        log.warning("Mail webhook isteği başarısız: %s", exc)
+        return False
+
+    try:
+        result = json.loads(raw) if raw else {}
+    except ValueError:
+        result = {}
+    if isinstance(result, dict) and result.get("ok") is False:
+        log.warning(
+            "Mail webhook reddetti: %s", result.get("error", raw[:200] or "bilinmeyen")
+        )
+        return False
+    return True
+
+
+def send_mail(settings: Settings, to: str, subject: str, body: str) -> bool:
+    """Mail gönderir.
+
+    Öncelik: HTTPS webhook (Apps Script Gmail köprüsü). Webhook tanımlı
+    değilse yerel geliştirme için Gmail SMTP (STARTTLS, 587) denenir.
+    Prod'da SMTP ayarları yoksa fail-closed: sıfırlama bağlantısı gönderilmez.
+    Geliştirmede hiçbir ayar yoksa konsola yazar.
+
+    Kayıt doğrulama maili gönderilmez; yalnızca 'şifremi unuttum' akışı
+    kullanılır.
+    """
+    if settings.mail_webhook_url or settings.mail_webhook_secret:
+        return _send_webhook(settings, to, subject, body)
+
     if not settings.smtp_user or not settings.smtp_password:
         if settings.is_production:
             log.error(
-                "MOMENZ_SMTP_USER / MOMENZ_SMTP_PASSWORD tanımlı değil; mail gönderilemedi: %s",
+                "Mail webhook'u veya MOMENZ_SMTP_USER / MOMENZ_SMTP_PASSWORD "
+                "tanımlı değil; mail gönderilemedi: %s",
                 to,
             )
             return False

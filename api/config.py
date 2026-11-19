@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_timeout: int = 20
+    mail_webhook_url: str = ""
+    mail_webhook_secret: str = ""
+    mail_webhook_timeout: int = 15
     mail_from: str = "Momenz <no-reply@momenz.com>"
     mail_reset_url: str = (
         "https://momenz.vercel.app/sifre-sifirla?token={token}"

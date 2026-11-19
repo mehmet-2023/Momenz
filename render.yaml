@@ -33,13 +33,10 @@ services:
         sync: false
       - key: MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
-      - key: MOMENZ_SMTP_HOST
-        value: smtp.gmail.com
-      - key: MOMENZ_SMTP_PORT
-        value: "587"
-      - key: MOMENZ_SMTP_USER
+      # Render free SMTP portlarını bloklar; HTTPS Apps Script köprüsü kullanılır.
+      - key: MOMENZ_MAIL_WEBHOOK_URL
         sync: false
-      - key: MOMENZ_SMTP_PASSWORD
+      - key: MOMENZ_MAIL_WEBHOOK_SECRET
         sync: false
       - key: MOMENZ_MAIL_FROM
         value: Momenz <no-reply@mome.nz>

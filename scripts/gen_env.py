@@ -25,8 +25,9 @@ MOMENZ_D1_API_TOKEN=
 MOMENZ_GOOGLE_DRIVE_API_KEY=
 MOMENZ_GOOGLE_SERVICE_ACCOUNT_JSON=
 
-# Mail — yalnızca "şifremi unuttum" akışı
-MOMENZ_RESEND_API_KEY=
+# Mail — yalnızca "şifremi unuttum" akışı (Apps Script Gmail köprüsü)
+MOMENZ_MAIL_WEBHOOK_URL=
+MOMENZ_MAIL_WEBHOOK_SECRET=
 MOMENZ_MAIL_RESET_URL=https://momenz.vercel.app/sifre-sifirla?token={token}
 """
 
