@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Chakra_Petch, Inter, Space_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import SiteFooter from "@/components/SiteFooter";
@@ -41,6 +42,7 @@ export default function RootLayout({
           <SiteHeader />
           <div className="app-body">{children}</div>
           <SiteFooter />
+          <Analytics />
         </AuthProvider>
       </body>
     </html>
