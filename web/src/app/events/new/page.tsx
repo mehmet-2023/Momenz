@@ -17,13 +17,34 @@ import type { Event, Job } from "@/lib/types";
 
 const TERMINAL = ["done", "failed", "canceled"];
 
-/** URL'deki resource key / query farklarından bağımsız klasör kimliği. */
-function driveFolderId(raw: string): string {
+/** Drive linkinden klasör kimliği ve resource key çıkarır (backend regex'leriyle aynı). */
+function driveMeta(raw: string): { id: string; resourceKey: string | null } {
   const text = raw.trim();
-  const folder = text.match(/(?:^|[?&/])folders\/([^/?#&]+)/);
-  if (folder) return folder[1];
-  const id = text.match(/[?&]id=([^&#]+)/);
-  return id ? id[1] : text;
+  if (/^[-\w]{10,}$/.test(text)) return { id: text, resourceKey: null };
+  const folder = text.match(/\/folders\/([-\w]{10,})/);
+  const id = folder
+    ? folder[1]
+    : (text.match(/[?&]id=([-\w]{10,})/)?.[1] ?? "");
+  return {
+    id,
+    resourceKey: text.match(/[?&]resourcekey=([-\w]{10,})/)?.[1] ?? null,
+  };
+}
+
+/**
+ * Backend'in folder_key değerini tarayıcıda üretir:
+ * sha1(`${folder_id}|${resource_key}|${include_subfolders}|${thumb_size}`)[:16]
+ * Böylece klasör listesine ihtiyaç kalmadan doğrudan etkinlik eşleştirilir.
+ */
+async function folderKeyFor(raw: string): Promise<string> {
+  const { id, resourceKey } = driveMeta(raw);
+  if (!id || !globalThis.crypto?.subtle) return "";
+  const bytes = new TextEncoder().encode(`${id}|${resourceKey ?? ""}|1|768`);
+  const digest = await globalThis.crypto.subtle.digest("SHA-1", bytes);
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 8)
+    .map((part) => part.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function mmss(seconds: number) {
@@ -108,14 +129,26 @@ export default function NewEventPage() {
       // normal oluşturma akışına devam et.
       let existing: Event | undefined;
       try {
-        const [folders, mine] = await Promise.all([listFolders(), getMyEvents()]);
-        const folderId = driveFolderId(clean);
-        const folder = folders.find(
-          (item) => item.url && driveFolderId(item.url) === folderId,
-        );
-        existing = folder
-          ? mine.items.find((item) => item.folder_key === folder.key)
+        const mine = await getMyEvents();
+        // Birincil yol: klasör anahtarını linkten üretip doğrudan etkinlikleri tara.
+        // (Klasör başka hesaba ait olsa bile etkinlik sahibi bu listededir.)
+        const key = await folderKeyFor(clean);
+        existing = key
+          ? mine.items.find((item) => item.folder_key === key)
           : undefined;
+        // Eski tarayıcılarda SHA-1 yoksa klasör listesiyle karşılaştır.
+        if (!existing) {
+          const folders = await listFolders();
+          const { id } = driveMeta(clean);
+          const folder = folders.find(
+            (item) =>
+              item.folder_id === id ||
+              (!!item.url && driveMeta(item.url).id === id),
+          );
+          existing = folder
+            ? mine.items.find((item) => item.folder_key === folder.key)
+            : undefined;
+        }
       } catch {
         existing = undefined;
       }
