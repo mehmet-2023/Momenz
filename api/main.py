@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
         if recovered:
             log.warning("Yarım kalmış %d iş kuyruğa alındı.", recovered)
         user_repo.purge_expired(db)
-    except D1Error as exc:
+    except TursoError as exc:
         log.error(
             "Turso bakım sorguları atlandı: %s | Şema eksikse `python scripts/migrate.py` çalıştır.",
             exc,
