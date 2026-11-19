@@ -129,10 +129,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root() -> dict[str, str]:
-        return {"service": "momenz-api", "docs": "/docs"}
+        return {"service": "momenz-api"}
 
     @app.get("/health", response_model=HealthOut, tags=["system"])
-    def health(db: D1Client = Depends(get_db)):
+    def health(db: TursoClient = Depends(get_db)):
         try:
             ok = db.ping()
         except Exception:
