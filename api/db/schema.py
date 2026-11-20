@@ -132,10 +132,12 @@ _STATEMENTS: tuple[str, ...] = (
         email TEXT NOT NULL COLLATE NOCASE,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         notified_at TEXT,
+        ip_hash TEXT,
         UNIQUE (event_id, email)
     )
     """,
     "CREATE INDEX IF NOT EXISTS event_reminders_pending_idx ON event_reminders (event_id, notified_at)",
+    "CREATE INDEX IF NOT EXISTS event_reminders_ip_idx ON event_reminders (event_id, ip_hash)",
     # --- tek satırlık index --------------------------------------------------
     """
     CREATE TABLE IF NOT EXISTS folder_index_versions (
@@ -176,6 +178,7 @@ _STATEMENTS: tuple[str, ...] = (
 # tabloyu değiştirmediği için bunlar ayrı ve hata toleranslı çalıştırılır.
 _COLUMN_STATEMENTS: tuple[str, ...] = (
     "ALTER TABLE folder_matrices ADD COLUMN cover_file_id TEXT",
+    "ALTER TABLE event_reminders ADD COLUMN ip_hash TEXT",
 )
 
 

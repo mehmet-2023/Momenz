@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { ApiError, ensureCsrf, subscribeEventReminder } from "@/lib/api";
+import { useEffect, useState, type FormEvent } from "react";
+import {
+  ApiError,
+  ensureCsrf,
+  getMyEventReminder,
+  subscribeEventReminder,
+} from "@/lib/api";
 
 type Props = {
   slug: string;
@@ -12,8 +17,26 @@ type Props = {
 export default function EventReminder({ slug, waiting = 0 }: Props) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    getMyEventReminder(slug)
+      .then((result) => {
+        if (active && result.subscribed) setDone(true);
+      })
+      .catch(() => {
+        // IP sorgusu başarısızsa formu göster; kayıt akışı bozulmasın.
+      })
+      .finally(() => {
+        if (active) setChecking(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -37,12 +60,14 @@ export default function EventReminder({ slug, waiting = 0 }: Props) {
     }
   }
 
+  if (checking && !done) return null;
+
   if (done) {
     return (
       <div className="reminder-done" role="status">
         <span className="reminder-mark" aria-hidden="true">✓</span>
         <div>
-          <b>LİSTEDESİN</b>
+          <b>EMAILİNİ ALDIK</b>
           <p>
             Fotoğraflar yüklendiğinde bu e-posta adresine tek bir haber
             göndereceğiz.

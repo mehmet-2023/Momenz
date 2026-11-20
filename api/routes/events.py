@@ -28,6 +28,7 @@ from ..schemas import (
     EventPhotoListOut,
     MessageOut,
     ReminderIn,
+    ReminderMineOut,
 )
 from ..services import events as service
 from ..services import reminders as reminder_service
@@ -117,6 +118,7 @@ def subscribe_reminder(
     payload: ReminderIn,
     request: Request,
     db: D1Client = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> MessageOut:
     ip = _client_ip(request)
     email = str(payload.email).strip().lower()
@@ -126,7 +128,23 @@ def subscribe_reminder(
         raise RateLimited("Bu ağdan çok fazla hatırlatma isteği gönderildi.")
     if not _reminder_email_minute.allows(email):
         raise RateLimited("Bu e-posta ile çok sık istek gönderildi.")
-    return reminder_service.subscribe(db, slug, email)
+    return reminder_service.subscribe(
+        db, slug, email, reminder_service.hash_client_ip(settings, ip)
+    )
+
+
+@router.get("/{slug}/reminders/mine", response_model=ReminderMineOut)
+def my_reminder(
+    slug: str,
+    request: Request,
+    db: D1Client = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> ReminderMineOut:
+    """Yalnızca bu IP'nin kaydı olup olmadığını söyler; e-posta açığa çıkmaz."""
+    ip_hash = reminder_service.hash_client_ip(settings, _client_ip(request))
+    return ReminderMineOut(
+        subscribed=reminder_service.subscribed_from_ip(db, slug, ip_hash)
+    )
 
 
 @router.get("/{slug}", response_model=EventOut)

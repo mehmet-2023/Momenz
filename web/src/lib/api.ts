@@ -236,6 +236,12 @@ export function subscribeEventReminder(
   });
 }
 
+export function getMyEventReminder(
+  slug: string,
+): Promise<{ subscribed: boolean }> {
+  return api(`/events/${encodeURIComponent(slug)}/reminders/mine`);
+}
+
 export async function embedFace(file: File): Promise<number[]> {
   const form = new FormData();
   form.append("file", file);

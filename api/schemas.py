@@ -120,6 +120,10 @@ class ReminderIn(BaseModel):
     email: EmailStr
 
 
+class ReminderMineOut(BaseModel):
+    subscribed: bool = False
+
+
 class EventListOut(BaseModel):
     items: list[EventOut]
     total: int

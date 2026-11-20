@@ -4,16 +4,36 @@ from ..db import D1Client
 from .common import sql_now
 
 
-def add(db: D1Client, reminder_id: str, event_id: str, email: str) -> bool:
+def add(
+    db: D1Client,
+    reminder_id: str,
+    event_id: str,
+    email: str,
+    ip_hash: str | None = None,
+) -> bool:
     """Aynı etkinlik + e-posta varsa yeni satır oluşturmaz."""
     changes = db.execute(
         """
-        INSERT OR IGNORE INTO event_reminders (id, event_id, email)
-        VALUES (?, ?, ?)
+        INSERT OR IGNORE INTO event_reminders (id, event_id, email, ip_hash)
+        VALUES (?, ?, ?, ?)
         """,
-        (reminder_id, event_id, email.strip().lower()),
+        (reminder_id, event_id, email.strip().lower(), ip_hash or None),
     )
     return changes > 0
+
+
+def has_ip(db: D1Client, event_id: str, ip_hash: str) -> bool:
+    """Bu IP'den etkinliğe hatırlatma bırakılmış mı?"""
+    if not ip_hash:
+        return False
+    row = db.query_one(
+        """
+        SELECT 1 FROM event_reminders
+        WHERE event_id = ? AND ip_hash = ? LIMIT 1
+        """,
+        (event_id, ip_hash),
+    )
+    return row is not None
 
 
 def pending_for_folder(db: D1Client, folder_key: str, limit: int = 1000) -> list[dict]:

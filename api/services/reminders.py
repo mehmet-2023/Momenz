@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from ..config import Settings
@@ -16,7 +17,14 @@ log = logging.getLogger("momenz.reminders")
 _MAX_PER_EVENT = 5000
 
 
-def subscribe(db: D1Client, slug: str, email: str) -> MessageOut:
+def hash_client_ip(settings: Settings, ip: str) -> str:
+    """IP'yi saklamadan aynı aygıtı tanımak için tek yönlü anahtar üretir."""
+    return hashlib.sha256(
+        f"{settings.jwt_secret}:{ip}".encode("utf-8")
+    ).hexdigest()
+
+
+def subscribe(db: D1Client, slug: str, email: str, ip_hash: str | None = None) -> MessageOut:
     """Fotoğrafları hazır olmayan etkinlik için e-posta kaydı."""
     event = event_repo.get_by_slug(db, slug)
     if not event or not event.get("is_public", True):
@@ -27,12 +35,22 @@ def subscribe(db: D1Client, slug: str, email: str) -> MessageOut:
     if repo.total_count(db, str(event["id"])) >= _MAX_PER_EVENT:
         raise Conflict("Bu etkinlik için hatırlatma listesi dolu.")
 
-    repo.add(db, new_id(), str(event["id"]), email)
+    repo.add(db, new_id(), str(event["id"]), email, ip_hash)
     # Aynı e-posta tekrar gönderilse de aynı yanıt verilir: liste üyeliği
     # dışarıdan sorgulanamaz.
     return MessageOut(
         message="Fotoğraflar yüklendiğinde bu e-posta adresine haber vereceğiz."
     )
+
+
+def subscribed_from_ip(db: D1Client, slug: str, ip_hash: str) -> bool:
+    """Ziyaretçinin bu IP'den etkinliğe e-posta bırakıp bırakmadığını söyler."""
+    if not ip_hash:
+        return False
+    event = event_repo.get_by_slug(db, slug)
+    if not event:
+        return False
+    return repo.has_ip(db, str(event["id"]), ip_hash)
 
 
 def notify_ready(db: D1Client, settings: Settings, folder_key: str) -> int:
